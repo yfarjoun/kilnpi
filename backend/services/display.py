@@ -1,13 +1,15 @@
-"""OLED display service — shows status on SSD1306 128x64 display.
+"""OLED display service — shows Raspberry Pi system info on SSD1306 128x64.
 
+Displays WiFi SSID/signal, CPU temperature, IP address, and uptime.
 Uses luma.oled on Raspberry Pi, falls back to a console-based mock on Mac.
 """
 
 import logging
 import platform
+import re
+import subprocess
 import threading
-
-from backend.services.poller import ControllerState
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +27,11 @@ class OledDisplay:
     def __init__(self) -> None:
         from luma.core.interface.serial import i2c  # type: ignore[import-untyped]
         from luma.oled.device import ssd1306  # type: ignore[import-untyped]
-        from PIL import Image, ImageDraw, ImageFont  # type: ignore[import-untyped]
+        from PIL import ImageFont  # type: ignore[import-untyped]
 
         serial = i2c(port=1, address=0x3C)
         self._device = ssd1306(serial)
         self._font = ImageFont.load_default()
-        self._Image = Image
-        self._ImageDraw = ImageDraw
 
     def show(self, lines: list[str]) -> None:
         from PIL import Image, ImageDraw  # type: ignore[import-untyped]
@@ -55,11 +55,116 @@ def _create_display() -> MockDisplay | OledDisplay:
         return MockDisplay()
 
 
-class DisplayService:
-    """Background thread that updates the OLED display with controller state."""
+def get_wifi_info() -> tuple[str, int]:
+    """Return (SSID, signal_percent). Falls back to ('--', 0) on error."""
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            # macOS: use airport command
+            result = subprocess.run(
+                [
+                    "/System/Library/PrivateFrameworks/Apple80211.framework"
+                    "/Versions/Current/Resources/airport",
+                    "-I",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            ssid = "--"
+            rssi = -100
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("SSID:"):
+                    ssid = line.split(":", 1)[1].strip()
+                elif line.startswith("agrCtlRSSI:"):
+                    rssi = int(line.split(":", 1)[1].strip())
+            # Convert RSSI to percentage (rough: -30=100%, -90=0%)
+            signal = max(0, min(100, (rssi + 90) * 100 // 60))
+            return ssid, signal
+        else:
+            # Linux (Raspberry Pi)
+            result = subprocess.run(
+                ["iwgetid", "-r"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            ssid = result.stdout.strip() or "--"
+            # Get signal strength
+            result2 = subprocess.run(
+                ["iwconfig", "wlan0"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            signal = 0
+            match = re.search(r"Signal level=(-?\d+)", result2.stdout)
+            if match:
+                rssi = int(match.group(1))
+                signal = max(0, min(100, (rssi + 90) * 100 // 60))
+            return ssid, signal
+    except Exception:
+        return "--", 0
 
-    def __init__(self, state: ControllerState, interval: float = 2.0) -> None:
-        self._state = state
+
+def get_cpu_temp() -> float:
+    """Return CPU temperature in Celsius. Falls back to 0.0 on error."""
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            # macOS doesn't have a simple CPU temp file; return 0
+            return 0.0
+        else:
+            # Linux: read from thermal zone
+            with open("/sys/class/thermal/thermal_zone0/temp") as f:
+                return int(f.read().strip()) / 1000.0
+    except Exception:
+        return 0.0
+
+
+def get_ip_address() -> str:
+    """Return the primary IP address. Falls back to '--' on error."""
+    try:
+        if platform.system() == "Darwin":
+            cmd = ["ipconfig", "getifaddr", "en0"]
+        else:
+            cmd = ["hostname", "-I"]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        ip = result.stdout.strip().split()[0] if result.stdout.strip() else "--"
+        return ip
+    except Exception:
+        return "--"
+
+
+def get_uptime() -> str:
+    """Return uptime as a short human-readable string."""
+    try:
+        secs = time.monotonic()
+        # Use process uptime as a proxy (close enough for Pi that starts at boot)
+        if platform.system() != "Darwin":
+            with open("/proc/uptime") as f:
+                secs = float(f.read().split()[0])
+        hours = int(secs) // 3600
+        minutes = (int(secs) % 3600) // 60
+        if hours >= 24:
+            days = hours // 24
+            hours = hours % 24
+            return f"{days}d {hours}h"
+        return f"{hours}h {minutes}m"
+    except Exception:
+        return "--"
+
+
+class DisplayService:
+    """Background thread that updates the OLED display with Pi system info."""
+
+    def __init__(self, interval: float = 5.0) -> None:
         self._interval = interval
         self._display = _create_display()
         self._thread: threading.Thread | None = None
@@ -80,19 +185,16 @@ class DisplayService:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
-                snap = self._state.snapshot()
-                heating = "ON" if snap["mv"] > 0 else "OFF"
-                alarms = []
-                if snap["alarm1"]:
-                    alarms.append("AL1")
-                if snap["alarm2"]:
-                    alarms.append("AL2")
-                alarm_str = " " + ",".join(alarms) if alarms else ""
+                ssid, signal = get_wifi_info()
+                cpu_temp = get_cpu_temp()
+                ip = get_ip_address()
+                uptime = get_uptime()
+
                 lines = [
-                    f"PV: {snap['pv']:.1f}C  SP: {snap['sp']:.1f}C",
-                    f"Heat: {heating}{alarm_str}",
-                    f"Mode: {snap['run_mode']}",
-                    f"Seg: {snap['segment']}  T: {snap['segment_elapsed_min']}m",
+                    f"WiFi: {ssid[:10]}",
+                    f"Sig: {signal}%  CPU: {cpu_temp:.0f}C",
+                    f"IP: {ip}",
+                    f"Up: {uptime}",
                 ]
                 self._display.show(lines)
             except Exception:
