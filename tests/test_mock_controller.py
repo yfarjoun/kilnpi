@@ -10,7 +10,7 @@ def test_initial_state() -> None:
     assert ctrl.read_pv() > 0  # room temp
     assert ctrl.read_sp() == 25.0
     assert ctrl.read_run_status() == RunMode.OFF
-    assert ctrl.read_alarm() is False
+    assert ctrl.read_alarm() == (False, False)
 
 
 def test_setpoint() -> None:

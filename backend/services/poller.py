@@ -21,7 +21,8 @@ class ControllerState:
     run_mode: RunMode = RunMode.OFF
     segment: int = 0
     segment_elapsed_min: int = 0
-    alarm: bool = False
+    alarm1: bool = False
+    alarm2: bool = False
     timestamp: str = ""
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -33,7 +34,8 @@ class ControllerState:
         run_mode: RunMode,
         segment: int,
         segment_elapsed_min: int,
-        alarm: bool,
+        alarm1: bool,
+        alarm2: bool,
     ) -> None:
         with self._lock:
             self.pv = pv
@@ -42,7 +44,8 @@ class ControllerState:
             self.run_mode = run_mode
             self.segment = segment
             self.segment_elapsed_min = segment_elapsed_min
-            self.alarm = alarm
+            self.alarm1 = alarm1
+            self.alarm2 = alarm2
             self.timestamp = datetime.now(UTC).isoformat()
 
     def snapshot(self) -> dict:
@@ -54,7 +57,8 @@ class ControllerState:
                 "run_mode": self.run_mode.name.lower(),
                 "segment": self.segment,
                 "segment_elapsed_min": self.segment_elapsed_min,
-                "alarm": self.alarm,
+                "alarm1": self.alarm1,
+                "alarm2": self.alarm2,
                 "timestamp": self.timestamp,
             }
 
@@ -95,9 +99,9 @@ class Poller:
                 run_mode = self._controller.read_run_status()
                 segment = self._controller.read_segment()
                 elapsed = self._controller.read_segment_elapsed()
-                alarm = self._controller.read_alarm()
+                alarm1, alarm2 = self._controller.read_alarm()
 
-                self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm)
+                self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm1, alarm2)
             except Exception:
                 logger.exception("Polling error")
 

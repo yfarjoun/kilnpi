@@ -62,8 +62,8 @@ class ControllerInterface(Protocol):
         """Read elapsed time in current segment."""
         ...
 
-    def read_alarm(self) -> bool:
-        """Read alarm status (True if any alarm active)."""
+    def read_alarm(self) -> tuple[bool, bool]:
+        """Read alarm status as (alarm1, alarm2)."""
         ...
 
     def start_autotune(self) -> None:

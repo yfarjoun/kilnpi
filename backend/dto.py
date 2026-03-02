@@ -23,7 +23,8 @@ class StatusResponse(BaseModel):
     run_mode: str
     segment: int
     segment_elapsed_min: int
-    alarm: bool
+    alarm1: bool
+    alarm2: bool
     timestamp: str
 
 

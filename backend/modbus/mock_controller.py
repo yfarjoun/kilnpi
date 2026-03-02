@@ -19,7 +19,8 @@ class MockController:
         self._run_mode = RunMode.OFF
         self._current_segment: int = 0
         self._segment_elapsed: int = 0
-        self._alarm: bool = False
+        self._alarm1: bool = False
+        self._alarm2: bool = False
         self._autotuning: bool = False
         self._last_update = time.time()
 
@@ -129,8 +130,8 @@ class MockController:
     def read_segment_elapsed(self) -> int:
         return self._segment_elapsed
 
-    def read_alarm(self) -> bool:
-        return self._alarm
+    def read_alarm(self) -> tuple[bool, bool]:
+        return (self._alarm1, self._alarm2)
 
     def start_autotune(self) -> None:
         self._autotuning = True

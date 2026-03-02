@@ -18,8 +18,10 @@ export function StatusBar({ status }: StatusBarProps) {
   return (
     <div className="flex items-center gap-4 text-sm">
       <div className="flex items-center gap-1">
-        <span className={`w-2 h-2 rounded-full ${status.alarm ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
-        <span className="text-gray-400">{status.alarm ? 'ALARM' : 'OK'}</span>
+        <span className={`w-2 h-2 rounded-full ${(status.alarm1 || status.alarm2) ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
+        <span className="text-gray-400">
+          {status.alarm1 && status.alarm2 ? 'AL1+AL2' : status.alarm1 ? 'AL1' : status.alarm2 ? 'AL2' : 'OK'}
+        </span>
       </div>
       <div className="text-gray-400">
         Mode: <span className={isRunning ? 'text-green-400' : 'text-gray-300'}>{status.run_mode.toUpperCase()}</span>

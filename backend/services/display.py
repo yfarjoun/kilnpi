@@ -81,9 +81,16 @@ class DisplayService:
         while not self._stop_event.is_set():
             try:
                 snap = self._state.snapshot()
+                heating = "ON" if snap["mv"] > 0 else "OFF"
+                alarms = []
+                if snap["alarm1"]:
+                    alarms.append("AL1")
+                if snap["alarm2"]:
+                    alarms.append("AL2")
+                alarm_str = " " + ",".join(alarms) if alarms else ""
                 lines = [
                     f"PV: {snap['pv']:.1f}C  SP: {snap['sp']:.1f}C",
-                    f"Output: {snap['mv']:.1f}%",
+                    f"Heat: {heating}{alarm_str}",
                     f"Mode: {snap['run_mode']}",
                     f"Seg: {snap['segment']}  T: {snap['segment_elapsed_min']}m",
                 ]

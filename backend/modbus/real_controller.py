@@ -124,8 +124,11 @@ class RealController:
     def read_segment_elapsed(self) -> int:
         return int(self._read_reg(registers.TE))
 
-    def read_alarm(self) -> bool:
-        return int(self._read_reg(registers.ALARM_STATUS)) != 0
+    def read_alarm(self) -> tuple[bool, bool]:
+        raw = int(self._read_reg(registers.ALARM_STATUS))
+        alarm1 = bool(raw & 0x01)
+        alarm2 = bool(raw & 0x02)
+        return (alarm1, alarm2)
 
     def start_autotune(self) -> None:
         self._write_reg(registers.AT, 1)

@@ -18,7 +18,8 @@ export interface Status {
   run_mode: string;
   segment: number;
   segment_elapsed_min: number;
-  alarm: boolean;
+  alarm1: boolean;
+  alarm2: boolean;
   timestamp: string;
 }
 

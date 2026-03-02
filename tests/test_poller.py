@@ -11,7 +11,7 @@ def test_controller_state_snapshot() -> None:
     state = ControllerState()
     state.update(
         pv=850.3, sp=900.0, mv=78.5,
-        run_mode=RunMode.RUNNING, segment=5, segment_elapsed_min=12, alarm=False,
+        run_mode=RunMode.RUNNING, segment=5, segment_elapsed_min=12, alarm1=False, alarm2=False,
     )
     snap = state.snapshot()
     assert snap["pv"] == 850.3
@@ -20,7 +20,8 @@ def test_controller_state_snapshot() -> None:
     assert snap["run_mode"] == "running"
     assert snap["segment"] == 5
     assert snap["segment_elapsed_min"] == 12
-    assert snap["alarm"] is False
+    assert snap["alarm1"] is False
+    assert snap["alarm2"] is False
     assert snap["timestamp"] != ""
 
 

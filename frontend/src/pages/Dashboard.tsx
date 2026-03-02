@@ -35,7 +35,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* PV Display */}
         <div className="bg-gray-800 rounded-xl p-6">
-          <TempGauge value={status.pv} label="Process Value" alarm={status.alarm} />
+          <TempGauge value={status.pv} label="Process Value" alarm={status.alarm1 || status.alarm2} />
         </div>
 
         {/* SP Display + Edit */}
