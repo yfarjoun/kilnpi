@@ -85,3 +85,12 @@ class FiringDetailResponse(BaseModel):
 
 class AutotuneRequest(BaseModel):
     start: bool = True
+
+
+class SlotAssignRequest(BaseModel):
+    program_id: int
+
+
+class SlotResponse(BaseModel):
+    slot: str
+    program: ProgramResponse | None

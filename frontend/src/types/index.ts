@@ -61,3 +61,8 @@ export interface FiringDetail {
   firing: Firing;
   readings: Reading[];
 }
+
+export interface Slot {
+  slot: string;
+  program: Program | null;
+}

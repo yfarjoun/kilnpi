@@ -66,7 +66,7 @@ LOOP = Register(
 PED = Register(0x001B, "PED", "Power-down behavior", writable=True, min_value=0, max_value=3)
 AL_P = Register(0x001C, "AL_P", "Wait zone tolerance", has_decimal=True, writable=True)
 RUN = Register(0x001D, "run", "Program control", writable=True, min_value=0, max_value=3)
-PRO = Register(0x001E, "Pro", "Current segment number")
+PRO = Register(0x001E, "Pro", "Current segment number", writable=True, min_value=0, max_value=64)
 TE = Register(0x001F, "TE", "Elapsed time in current segment")
 
 # --- Ramp/soak segment addresses ---

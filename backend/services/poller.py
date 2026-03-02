@@ -24,6 +24,8 @@ class ControllerState:
     alarm1: bool = False
     alarm2: bool = False
     timestamp: str = ""
+    active_program_id: int | None = None
+    active_program_name: str | None = None
     _run_started_at: datetime | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -46,6 +48,8 @@ class ControllerState:
                 self._run_started_at = datetime.now(UTC)
             elif not now_running:
                 self._run_started_at = None
+                self.active_program_id = None
+                self.active_program_name = None
 
             self.pv = pv
             self.sp = sp

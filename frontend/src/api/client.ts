@@ -79,4 +79,22 @@ export const api = {
 
   getFiring: (id: number) =>
     request<import('../types').FiringDetail>(`/firings/${id}`),
+
+  // Slots
+  getSlots: () => request<import('../types').Slot[]>('/slots'),
+
+  assignSlot: (slot: string, programId: number) =>
+    request<import('../types').Slot>(`/slots/${slot}/assign`, {
+      method: 'PUT',
+      body: JSON.stringify({ program_id: programId }),
+    }),
+
+  unassignSlot: (slot: string) =>
+    request<{ ok: boolean }>(`/slots/${slot}/assign`, { method: 'DELETE' }),
+
+  fireSlot: (slot: string) =>
+    request<{ ok: boolean; slot: string; program: string; start_segment: number }>(
+      `/slots/${slot}/fire`,
+      { method: 'POST' },
+    ),
 };

@@ -39,6 +39,18 @@ class Program(Base):
         self.segments_json = json.dumps(value)
 
 
+class SlotAssignment(Base):
+    __tablename__ = "slot_assignments"
+
+    slot: Mapped[str] = mapped_column(String, primary_key=True)  # "A" or "B"
+    program_id: Mapped[int] = mapped_column(ForeignKey("programs.id"), nullable=False)
+    assigned_at: Mapped[str] = mapped_column(
+        String, default=lambda: datetime.now(UTC).isoformat()
+    )
+
+    program: Mapped[Program] = relationship()
+
+
 class Firing(Base):
     __tablename__ = "firings"
 

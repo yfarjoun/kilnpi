@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.api import control, history, programs, status, ws
+from backend.api import control, history, programs, slots, status, ws
 from backend.config import settings
 from backend.modbus.controller import ControllerInterface
 from backend.modbus.mock_controller import MockController
@@ -49,6 +49,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     # Wire up API modules
     status.set_state(state)
     control.set_controller(controller)
+    slots.set_controller(controller)
+    slots.set_state(state)
 
     # Start background services
     poller = Poller(controller, state, interval=settings.poll_interval_sec)
@@ -92,6 +94,7 @@ app.include_router(status.router, prefix="/api")
 app.include_router(control.router, prefix="/api")
 app.include_router(programs.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
+app.include_router(slots.router, prefix="/api")
 app.include_router(ws.router, prefix="/api")
 
 # Serve frontend static files if built

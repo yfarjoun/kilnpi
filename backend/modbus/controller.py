@@ -66,6 +66,10 @@ class ControllerInterface(Protocol):
         """Read alarm status as (alarm1, alarm2)."""
         ...
 
+    def write_start_segment(self, segment: int) -> None:
+        """Write the starting segment number (Pro register)."""
+        ...
+
     def start_autotune(self) -> None:
         """Trigger auto-tuning."""
         ...

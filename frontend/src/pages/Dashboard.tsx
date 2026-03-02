@@ -1,21 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStatus } from '../hooks/useStatus';
 import { TempGauge } from '../components/TempGauge';
 import { StatusBar } from '../components/StatusBar';
 import { api } from '../api/client';
-import type { Program } from '../types';
+import type { Program, Slot } from '../types';
 
 export function Dashboard() {
   const status = useStatus();
   const [spInput, setSpInput] = useState('');
   const [editing, setEditing] = useState(false);
+  const [slots, setSlots] = useState<Slot[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
-  const [selectedProgramId, setSelectedProgramId] = useState<number | null>(null);
+  const [picking, setPicking] = useState<string | null>(null); // slot being changed
   const [loading, setLoading] = useState(false);
+  const [firedSlot, setFiredSlot] = useState<string | null>(null);
+
+  const loadSlots = useCallback(() => {
+    api.getSlots().then(setSlots).catch(() => {});
+  }, []);
 
   useEffect(() => {
+    loadSlots();
     api.listPrograms().then(setPrograms).catch(() => {});
-  }, []);
+  }, [loadSlots]);
 
   const handleSetSP = async () => {
     const value = parseFloat(spInput);
@@ -26,19 +33,32 @@ export function Dashboard() {
     }
   };
 
-  const handleStart = async () => {
-    if (!selectedProgramId) return;
+  const handleFire = async (slot: string) => {
+    console.log('handleFire called for slot', slot);
     setLoading(true);
     try {
-      const program = programs.find((p) => p.id === selectedProgramId);
-      if (program) {
-        await api.setControllerProgram(program.segments);
-        await api.startProgram();
-      }
+      const result = await api.fireSlot(slot);
+      console.log('fireSlot result', result);
+      setFiredSlot(slot);
+    } catch (err) {
+      console.error('fireSlot error', err);
+      alert(`Failed to fire: ${err instanceof Error ? err.message : err}`);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleAssign = async (slot: string, programId: number) => {
+    await api.assignSlot(slot, programId);
+    setPicking(null);
+    loadSlots();
+  };
+
+  const isRunning = status?.run_mode === 'running';
+  // Clear firedSlot when program stops
+  useEffect(() => {
+    if (!isRunning) setFiredSlot(null);
+  }, [isRunning]);
 
   if (!status) {
     return (
@@ -47,8 +67,8 @@ export function Dashboard() {
       </div>
     );
   }
-
-  const isRunning = status.run_mode === 'running';
+  const slotA = slots.find((s) => s.slot === 'A');
+  const slotB = slots.find((s) => s.slot === 'B');
 
   return (
     <div className="space-y-6">
@@ -88,14 +108,14 @@ export function Dashboard() {
                   Cancel
                 </button>
               </div>
-            ) : (
+            ) : !isRunning ? (
               <button
                 onClick={() => { setSpInput(status.sp.toString()); setEditing(true); }}
                 className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
               >
                 Edit SP
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -117,11 +137,76 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* Slot Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {[slotA, slotB].map((slot, idx) => {
+          const slotName = idx === 0 ? 'A' : 'B';
+          const progName = slot?.program?.name;
+          const slotLabel = `Slot ${slotName}${progName ? ` (${progName})` : ''}`;
+          const assigned = slot?.program != null;
+
+          return (
+            <div key={slotName} className="bg-gray-800 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-white">{slotLabel}</h3>
+                <button
+                  onClick={() => setPicking(picking === slotName ? null : slotName)}
+                  className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs text-white"
+                >
+                  Change
+                </button>
+              </div>
+
+              {assigned ? (
+                <div className="space-y-2">
+                  <div className="text-white font-medium">{slot!.program!.name}</div>
+                  <div className="text-sm text-gray-400">
+                    {slot!.program!.segments.length} segments
+                    {slot!.program!.description && ` \u00b7 ${slot!.program!.description}`}
+                  </div>
+                  <button
+                    onClick={() => handleFire(slotName)}
+                    disabled={isRunning || loading}
+                    className="mt-2 w-full px-4 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-medium text-white"
+                  >
+                    {loading ? 'Starting...' : `Fire ${slotLabel}`}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-gray-500 py-4 text-center">
+                  Not assigned &mdash; pick a program below
+                </div>
+              )}
+
+              {/* Program picker dropdown */}
+              {picking === slotName && (
+                <div className="mt-3 border-t border-gray-700 pt-3 space-y-1">
+                  {programs.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleAssign(slotName, p.id)}
+                      className="w-full text-left px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                    >
+                      {p.name} <span className="text-gray-400">({p.segments.length} seg)</span>
+                    </button>
+                  ))}
+                  {programs.length === 0 && (
+                    <div className="text-gray-500 text-sm text-center py-2">
+                      No programs in library yet
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Program Status */}
       {isRunning && (
         <div className="bg-gray-800 rounded-xl p-6">
           <h3 className="text-lg font-semibold text-white mb-2">
-            Program Running{selectedProgramId ? `: ${programs.find((p) => p.id === selectedProgramId)?.name ?? ''}` : ''}
+            Running: {firedSlot && slots.find((s) => s.slot === firedSlot)?.program?.name || 'Program'}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
@@ -140,35 +225,15 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Controls */}
-      <div className="flex items-center gap-4">
-        {!isRunning && (
-          <select
-            value={selectedProgramId ?? ''}
-            onChange={(e) => setSelectedProgramId(e.target.value ? Number(e.target.value) : null)}
-            className="px-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
-          >
-            <option value="">Select program...</option>
-            {programs.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        )}
-        <button
-          onClick={handleStart}
-          disabled={isRunning || !selectedProgramId || loading}
-          className="px-6 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-medium text-white"
-        >
-          {loading ? 'Loading...' : 'Start Program'}
-        </button>
+      {/* Stop button */}
+      {isRunning && (
         <button
           onClick={() => api.stopProgram()}
-          disabled={!isRunning}
-          className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-medium text-white"
+          className="w-full px-6 py-3 bg-red-600 hover:bg-red-500 rounded-lg font-medium text-white"
         >
           Stop Program
         </button>
-      </div>
+      )}
     </div>
   );
 }

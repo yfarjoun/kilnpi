@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { usePrograms } from '../hooks/usePrograms';
 import { ProfileEditor } from '../components/ProfileEditor';
-import type { Segment } from '../types';
+import type { Segment, Slot } from '../types';
 import { api } from '../api/client';
 
 export function Programs() {
@@ -10,6 +10,18 @@ export function Programs() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [slots, setSlots] = useState<Slot[]>([]);
+
+  const loadSlots = useCallback(() => {
+    api.getSlots().then(setSlots).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadSlots(); }, [loadSlots]);
+
+  const assignToSlot = async (slot: string, programId: number) => {
+    await api.assignSlot(slot, programId);
+    loadSlots();
+  };
 
   const startNew = () => {
     setEditing('new');
@@ -36,18 +48,23 @@ export function Programs() {
     setEditing(null);
   };
 
-  const uploadToController = async (segs: Segment[]) => {
-    await api.setControllerProgram(segs);
-    alert('Program uploaded to controller');
+  const duplicate = async (id: number) => {
+    const prog = programs.find((p) => p.id === id);
+    if (!prog) return;
+    await create({
+      name: `${prog.name} (copy)`,
+      description: prog.description || undefined,
+      segments: prog.segments,
+    });
   };
 
-  const downloadFromController = async () => {
-    const segs = await api.getControllerProgram();
-    setSegments(segs);
-    setEditing('new');
-    setName('From Controller');
-    setDescription('Downloaded from controller');
+  const confirmDelete = async (id: number) => {
+    const prog = programs.find((p) => p.id === id);
+    if (!prog) return;
+    if (!window.confirm(`Delete "${prog.name}"? This cannot be undone.`)) return;
+    await remove(id);
   };
+
 
   if (loading) {
     return <div className="text-gray-400">Loading programs...</div>;
@@ -57,20 +74,12 @@ export function Programs() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-white">Programs</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={downloadFromController}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm text-white"
-          >
-            Import from Controller
-          </button>
-          <button
-            onClick={startNew}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white"
-          >
-            New Program
-          </button>
-        </div>
+        <button
+          onClick={startNew}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white"
+        >
+          New Program
+        </button>
       </div>
 
       {editing !== null ? (
@@ -105,12 +114,6 @@ export function Programs() {
               Save
             </button>
             <button
-              onClick={() => uploadToController(segments)}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded text-sm text-white"
-            >
-              Upload to Controller
-            </button>
-            <button
               onClick={() => setEditing(null)}
               className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm text-white"
             >
@@ -142,10 +145,22 @@ export function Programs() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => uploadToController(prog.segments)}
-                    className="px-3 py-1 bg-amber-600 hover:bg-amber-500 rounded text-xs text-white"
+                    onClick={() => assignToSlot('A', prog.id)}
+                    className={`px-3 py-1 rounded text-xs text-white ${
+                      slots.find((s) => s.slot === 'A')?.program?.id === prog.id
+                        ? 'bg-green-700' : 'bg-indigo-600 hover:bg-indigo-500'
+                    }`}
                   >
-                    Upload
+                    {slots.find((s) => s.slot === 'A')?.program?.id === prog.id ? 'Slot A \u2713' : '\u2192 Slot A'}
+                  </button>
+                  <button
+                    onClick={() => assignToSlot('B', prog.id)}
+                    className={`px-3 py-1 rounded text-xs text-white ${
+                      slots.find((s) => s.slot === 'B')?.program?.id === prog.id
+                        ? 'bg-green-700' : 'bg-indigo-600 hover:bg-indigo-500'
+                    }`}
+                  >
+                    {slots.find((s) => s.slot === 'B')?.program?.id === prog.id ? 'Slot B \u2713' : '\u2192 Slot B'}
                   </button>
                   <button
                     onClick={() => startEdit(prog.id)}
@@ -154,7 +169,13 @@ export function Programs() {
                     Edit
                   </button>
                   <button
-                    onClick={() => remove(prog.id)}
+                    onClick={() => duplicate(prog.id)}
+                    className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs text-white"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={() => confirmDelete(prog.id)}
                     className="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs text-white"
                   >
                     Delete

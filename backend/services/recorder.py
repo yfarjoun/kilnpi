@@ -43,7 +43,12 @@ class Recorder:
     async def _start_firing(self, snapshot: dict) -> None:
         now = datetime.now(UTC).isoformat()
         async with async_session() as session:
-            firing = Firing(started_at=now, status="running")
+            firing = Firing(
+                started_at=now,
+                status="running",
+                program_id=self._state.active_program_id,
+                program_name=self._state.active_program_name,
+            )
             session.add(firing)
             await session.commit()
             await session.refresh(firing)

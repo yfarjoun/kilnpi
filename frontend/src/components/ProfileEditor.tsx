@@ -67,9 +67,6 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
 
   const toX = (time: number) => MARGIN.left + (time / activeMaxTime) * plotW;
   const toY = (temp: number) => MARGIN.top + plotH - (temp / activeMaxTemp) * plotH;
-  const fromY = (py: number) => ((MARGIN.top + plotH - py) / plotH) * activeMaxTemp;
-  const fromX = (px: number) => ((px - MARGIN.left) / plotW) * activeMaxTime;
-
   const pathD = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.time)} ${toY(p.temp)}`)
     .join(' ');

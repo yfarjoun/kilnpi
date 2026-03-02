@@ -130,6 +130,9 @@ class RealController:
         alarm2 = bool(raw & 0x02)
         return (alarm1, alarm2)
 
+    def write_start_segment(self, segment: int) -> None:
+        self._write_reg(registers.PRO, segment)
+
     def start_autotune(self) -> None:
         self._write_reg(registers.AT, 1)
 

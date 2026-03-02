@@ -27,6 +27,7 @@ class MockController:
         # Program execution state
         self._program_start_time: float = 0
         self._segment_start_time: float = 0
+        self._start_segment: int = 0  # offset into _program for slot firing
 
     def _update_simulation(self) -> None:
         """Advance the thermal simulation."""
@@ -63,9 +64,15 @@ class MockController:
             return
 
         seg = self._program[self._current_segment]
+
+        # End marker: ramp=0 means program is done (matches real controller)
+        if seg.ramp_min == 0:
+            self._run_mode = RunMode.OFF
+            self._current_segment = 0
+            return
+
         self._segment_elapsed = int((now - self._segment_start_time) / 60)
 
-        # During ramp phase
         total_seg_time = seg.ramp_min + seg.soak_min
         if self._segment_elapsed >= total_seg_time:
             # Move to next segment
@@ -73,7 +80,11 @@ class MockController:
             self._segment_start_time = now
             self._segment_elapsed = 0
             if self._current_segment < len(self._program):
-                self._sp = self._program[self._current_segment].target_temp
+                next_seg = self._program[self._current_segment]
+                if next_seg.ramp_min == 0:
+                    self._run_mode = RunMode.OFF
+                else:
+                    self._sp = next_seg.target_temp
             else:
                 self._run_mode = RunMode.OFF
         else:
@@ -105,21 +116,26 @@ class MockController:
     def write_program(self, segments: list[Segment]) -> None:
         self._program = list(segments)
 
+    def write_start_segment(self, segment: int) -> None:
+        self._start_segment = segment
+
     def start_program(self) -> None:
         if not self._program:
             return
         self._run_mode = RunMode.RUNNING
-        self._current_segment = 0
+        self._current_segment = self._start_segment
         self._segment_elapsed = 0
         now = time.time()
         self._program_start_time = now
         self._segment_start_time = now
-        self._sp = self._program[0].target_temp
+        if self._current_segment < len(self._program):
+            self._sp = self._program[self._current_segment].target_temp
 
     def stop_program(self) -> None:
         self._run_mode = RunMode.OFF
         self._current_segment = 0
         self._segment_elapsed = 0
+        self._start_segment = 0
 
     def read_run_status(self) -> RunMode:
         return self._run_mode
