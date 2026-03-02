@@ -137,7 +137,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-gray-800 rounded-lg p-4" ref={measuredRef}>
+      <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4" ref={measuredRef}>
         <svg
           ref={svgRef}
           width={svgWidth}
@@ -153,8 +153,8 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
             const temp = Math.round(activeMaxTemp * (1 - i / yTicks));
             return (
               <g key={`yg-${i}`}>
-                <line x1={MARGIN.left} y1={y} x2={MARGIN.left + plotW} y2={y} stroke="#374151" strokeDasharray="3 3" />
-                <text x={MARGIN.left - 8} y={y + 4} fill="#9CA3AF" fontSize={10} textAnchor="end">{temp}</text>
+                <line x1={MARGIN.left} y1={y} x2={MARGIN.left + plotW} y2={y} stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                <text x={MARGIN.left - 8} y={y + 4} fill="var(--chart-text)" fontSize={10} textAnchor="end">{temp}</text>
               </g>
             );
           })}
@@ -163,15 +163,15 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
             const time = Math.round(activeMaxTime * (i / xTicks));
             return (
               <g key={`xg-${i}`}>
-                <line x1={x} y1={MARGIN.top} x2={x} y2={MARGIN.top + plotH} stroke="#374151" strokeDasharray="3 3" />
-                <text x={x} y={CHART_HEIGHT - 8} fill="#9CA3AF" fontSize={10} textAnchor="middle">{time}m</text>
+                <line x1={x} y1={MARGIN.top} x2={x} y2={MARGIN.top + plotH} stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                <text x={x} y={CHART_HEIGHT - 8} fill="var(--chart-text)" fontSize={10} textAnchor="middle">{time}m</text>
               </g>
             );
           })}
 
           {/* Axis labels */}
-          <text x={svgWidth / 2} y={CHART_HEIGHT} fill="#9CA3AF" fontSize={11} textAnchor="middle">Minutes</text>
-          <text x={12} y={CHART_HEIGHT / 2} fill="#9CA3AF" fontSize={11} textAnchor="middle" transform={`rotate(-90, 12, ${CHART_HEIGHT / 2})`}>°C</text>
+          <text x={svgWidth / 2} y={CHART_HEIGHT} fill="var(--chart-text)" fontSize={11} textAnchor="middle">Minutes</text>
+          <text x={12} y={CHART_HEIGHT / 2} fill="var(--chart-text)" fontSize={11} textAnchor="middle" transform={`rotate(-90, 12, ${CHART_HEIGHT / 2})`}>°C</text>
 
           {/* Profile line */}
           <path d={pathD} fill="none" stroke="#F59E0B" strokeWidth={2} />
@@ -209,7 +209,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
               <text
                 x={toX(time)}
                 y={toY(temp) + 18}
-                fill="#9CA3AF"
+                fill="var(--chart-text)"
                 fontSize={9}
                 textAnchor="middle"
               >
@@ -218,7 +218,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
             </g>
           ))}
         </svg>
-        <div className="text-xs text-gray-500 mt-1">
+        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
           Drag points to adjust: up/down for temperature, left/right for timing
         </div>
       </div>

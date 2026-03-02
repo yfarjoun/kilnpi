@@ -14,6 +14,8 @@ export function Dashboard() {
   const [picking, setPicking] = useState<string | null>(null); // slot being changed
   const [loading, setLoading] = useState(false);
   const [firedSlot, setFiredSlot] = useState<string | null>(null);
+  const [optimisticRunning, setOptimisticRunning] = useState<boolean | null>(null);
+  const [stopping, setStopping] = useState(false);
 
   const loadSlots = useCallback(() => {
     api.getSlots().then(setSlots).catch(() => {});
@@ -34,14 +36,14 @@ export function Dashboard() {
   };
 
   const handleFire = async (slot: string) => {
-    console.log('handleFire called for slot', slot);
     setLoading(true);
+    setOptimisticRunning(true);
+    setFiredSlot(slot);
     try {
-      const result = await api.fireSlot(slot);
-      console.log('fireSlot result', result);
-      setFiredSlot(slot);
+      await api.fireSlot(slot);
     } catch (err) {
-      console.error('fireSlot error', err);
+      setOptimisticRunning(null);
+      setFiredSlot(null);
       alert(`Failed to fire: ${err instanceof Error ? err.message : err}`);
     } finally {
       setLoading(false);
@@ -54,7 +56,18 @@ export function Dashboard() {
     loadSlots();
   };
 
-  const isRunning = status?.run_mode === 'running';
+  const realRunning = status?.run_mode === 'running';
+  // Clear optimistic override once real status catches up
+  useEffect(() => {
+    if (optimisticRunning === true && realRunning) {
+      setOptimisticRunning(null);
+    }
+    if (optimisticRunning === false && !realRunning) {
+      setOptimisticRunning(null);
+      setStopping(false);
+    }
+  }, [realRunning, optimisticRunning]);
+  const isRunning = optimisticRunning ?? realRunning;
   // Clear firedSlot when program stops
   useEffect(() => {
     if (!isRunning) setFiredSlot(null);
@@ -63,7 +76,7 @@ export function Dashboard() {
   if (!status) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400 text-lg">Connecting to controller...</div>
+        <div className="text-gray-500 dark:text-gray-400 text-lg">Connecting to controller...</div>
       </div>
     );
   }
@@ -76,12 +89,12 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* PV Display */}
-        <div className="bg-gray-800 rounded-xl p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <TempGauge value={status.pv} label="Process Value" alarm={status.alarm1 || status.alarm2} />
         </div>
 
         {/* SP Display + Edit */}
-        <div className="bg-gray-800 rounded-xl p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <TempGauge value={status.sp} label="Setpoint" />
           <div className="mt-4 flex justify-center">
             {editing ? (
@@ -91,7 +104,7 @@ export function Dashboard() {
                   value={spInput}
                   onChange={(e) => setSpInput(e.target.value)}
                   placeholder={status.sp.toString()}
-                  className="w-24 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-center"
+                  className="w-24 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-white text-center"
                   autoFocus
                   onKeyDown={(e) => e.key === 'Enter' && handleSetSP()}
                 />
@@ -103,7 +116,7 @@ export function Dashboard() {
                 </button>
                 <button
                   onClick={() => setEditing(false)}
-                  className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-sm text-white"
+                  className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-sm text-gray-700 dark:text-white"
                 >
                   Cancel
                 </button>
@@ -111,7 +124,7 @@ export function Dashboard() {
             ) : !isRunning ? (
               <button
                 onClick={() => { setSpInput(status.sp.toString()); setEditing(true); }}
-                className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm text-gray-700 dark:text-white"
               >
                 Edit SP
               </button>
@@ -120,16 +133,16 @@ export function Dashboard() {
         </div>
 
         {/* MV Display */}
-        <div className="bg-gray-800 rounded-xl p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <div className="text-center">
-            <div className="text-sm text-gray-400 uppercase tracking-wide">Output</div>
-            <div className="text-5xl font-bold text-amber-400 tabular-nums">
+            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Output</div>
+            <div className="text-5xl font-bold text-amber-500 dark:text-amber-400 tabular-nums">
               {status.mv.toFixed(1)}
               <span className="text-2xl text-gray-400">%</span>
             </div>
-            <div className="mt-3 w-full bg-gray-700 rounded-full h-3">
+            <div className="mt-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
-                className="bg-amber-400 h-3 rounded-full transition-all duration-500"
+                className="bg-amber-500 dark:bg-amber-400 h-3 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(100, status.mv)}%` }}
               />
             </div>
@@ -146,12 +159,12 @@ export function Dashboard() {
           const assigned = slot?.program != null;
 
           return (
-            <div key={slotName} className="bg-gray-800 rounded-xl p-6">
+            <div key={slotName} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-white">{slotLabel}</h3>
+                <h3 className="text-lg font-semibold">{slotLabel}</h3>
                 <button
                   onClick={() => setPicking(picking === slotName ? null : slotName)}
-                  className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs text-white"
+                  className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-xs text-gray-700 dark:text-white"
                 >
                   Change
                 </button>
@@ -159,39 +172,39 @@ export function Dashboard() {
 
               {assigned ? (
                 <div className="space-y-2">
-                  <div className="text-white font-medium">{slot!.program!.name}</div>
-                  <div className="text-sm text-gray-400">
+                  <div className="font-medium">{slot!.program!.name}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     {slot!.program!.segments.length} segments
                     {slot!.program!.description && ` \u00b7 ${slot!.program!.description}`}
                   </div>
                   <button
                     onClick={() => handleFire(slotName)}
                     disabled={isRunning || loading}
-                    className="mt-2 w-full px-4 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-medium text-white"
+                    className="mt-2 w-full px-4 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500 rounded-lg font-medium text-white"
                   >
                     {loading ? 'Starting...' : `Fire ${slotLabel}`}
                   </button>
                 </div>
               ) : (
-                <div className="text-gray-500 py-4 text-center">
+                <div className="text-gray-400 dark:text-gray-500 py-4 text-center">
                   Not assigned &mdash; pick a program below
                 </div>
               )}
 
               {/* Program picker dropdown */}
               {picking === slotName && (
-                <div className="mt-3 border-t border-gray-700 pt-3 space-y-1">
+                <div className="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3 space-y-1">
                   {programs.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => handleAssign(slotName, p.id)}
-                      className="w-full text-left px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
+                      className="w-full text-left px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm"
                     >
-                      {p.name} <span className="text-gray-400">({p.segments.length} seg)</span>
+                      {p.name} <span className="text-gray-500 dark:text-gray-400">({p.segments.length} seg)</span>
                     </button>
                   ))}
                   {programs.length === 0 && (
-                    <div className="text-gray-500 text-sm text-center py-2">
+                    <div className="text-gray-400 dark:text-gray-500 text-sm text-center py-2">
                       No programs in library yet
                     </div>
                   )}
@@ -204,22 +217,23 @@ export function Dashboard() {
 
       {/* Program Status */}
       {isRunning && (
-        <div className="bg-gray-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-2">
-            Running: {firedSlot && slots.find((s) => s.slot === firedSlot)?.program?.name || 'Program'}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
+          <h3 className="text-lg font-semibold mb-2">
+            {!realRunning && optimisticRunning ? 'Starting' : 'Running'}:{' '}
+            {firedSlot && slots.find((s) => s.slot === firedSlot)?.program?.name || 'Program'}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-gray-400">Segment:</span>{' '}
-              <span className="text-white">{status.segment}</span>
+              <span className="text-gray-500 dark:text-gray-400">Segment:</span>{' '}
+              <span>{status.segment}</span>
             </div>
             <div>
-              <span className="text-gray-400">Seg elapsed:</span>{' '}
-              <span className="text-white">{status.segment_elapsed_min} min</span>
+              <span className="text-gray-500 dark:text-gray-400">Seg elapsed:</span>{' '}
+              <span>{status.segment_elapsed_min} min</span>
             </div>
             <div>
-              <span className="text-gray-400">Total elapsed:</span>{' '}
-              <span className="text-white">{status.total_elapsed_min} min</span>
+              <span className="text-gray-500 dark:text-gray-400">Total elapsed:</span>{' '}
+              <span>{status.total_elapsed_min} min</span>
             </div>
           </div>
         </div>
@@ -228,10 +242,20 @@ export function Dashboard() {
       {/* Stop button */}
       {isRunning && (
         <button
-          onClick={() => api.stopProgram()}
-          className="w-full px-6 py-3 bg-red-600 hover:bg-red-500 rounded-lg font-medium text-white"
+          onClick={async () => {
+            setStopping(true);
+            setOptimisticRunning(false);
+            try {
+              await api.stopProgram();
+            } catch {
+              setStopping(false);
+              setOptimisticRunning(null);
+            }
+          }}
+          disabled={stopping}
+          className="w-full px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-400 rounded-lg font-medium text-white"
         >
-          Stop Program
+          {stopping ? 'Stopping...' : 'Stop Program'}
         </button>
       )}
     </div>

@@ -32,51 +32,51 @@ export function Settings() {
   };
 
   if (!pid) {
-    return <div className="text-gray-400">Loading settings...</div>;
+    return <div className="text-gray-500 dark:text-gray-400">Loading settings...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-white">Settings</h2>
+      <h2 className="text-xl font-semibold">Settings</h2>
 
       {/* PID Parameters */}
-      <div className="bg-gray-800 rounded-xl p-6 space-y-4">
-        <h3 className="text-lg font-medium text-white">PID Parameters</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 space-y-4 shadow-sm dark:shadow-none">
+        <h3 className="text-lg font-medium">PID Parameters</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">P (Proportional)</label>
+            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">P (Proportional)</label>
             <input
               type="number"
               value={pid.p}
               onChange={(e) => setPid({ ...pid, p: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+              className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">I (Integral)</label>
+            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">I (Integral)</label>
             <input
               type="number"
               value={pid.i}
               onChange={(e) => setPid({ ...pid, i: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+              className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">D (Derivative)</label>
+            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">D (Derivative)</label>
             <input
               type="number"
               value={pid.d}
               onChange={(e) => setPid({ ...pid, d: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+              className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Cycle Time (s)</label>
+            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Cycle Time (s)</label>
             <input
               type="number"
               value={pid.cycle_time}
               onChange={(e) => setPid({ ...pid, cycle_time: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+              className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
             />
           </div>
         </div>
@@ -84,18 +84,18 @@ export function Settings() {
           <button
             onClick={savePID}
             disabled={saving}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded text-sm text-white"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-300 dark:disabled:bg-gray-700 rounded text-sm text-white"
           >
             {saving ? 'Saving...' : 'Save PID'}
           </button>
-          {message && <span className="text-sm text-green-400">{message}</span>}
+          {message && <span className="text-sm text-green-600 dark:text-green-400">{message}</span>}
         </div>
       </div>
 
       {/* Auto-tune */}
-      <div className="bg-gray-800 rounded-xl p-6 space-y-4">
-        <h3 className="text-lg font-medium text-white">Auto-Tune</h3>
-        <p className="text-sm text-gray-400">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 space-y-4 shadow-sm dark:shadow-none">
+        <h3 className="text-lg font-medium">Auto-Tune</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           Auto-tuning will automatically determine optimal PID parameters for your kiln.
           The process temporarily disrupts temperature control.
         </p>

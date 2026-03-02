@@ -110,6 +110,7 @@ def test_display_service_formats_lines() -> None:
         pv=100, sp=200, mv=50, run_mode=RunMode.RUNNING,
         segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
     )
+    state.last_poll_ok = True
 
     service = DisplayService(state, lambda: 2, interval=0.05)
     service._display = CapturingDisplay()  # type: ignore[assignment]
@@ -125,6 +126,7 @@ def test_display_service_formats_lines() -> None:
     assert "CPU:" in lines[0]
     assert "W" in lines[1]
     assert "B+" in lines[1]  # lambda returns 2 > 0
+    assert "MB+" in lines[1]  # state was updated → poll ok
     assert "Poll:" in lines[2]
 
 
@@ -145,6 +147,25 @@ def test_display_shows_browser_disconnected() -> None:
 
     assert len(shown_lines) >= 1
     assert "B-" in shown_lines[0][1]
+
+
+def test_display_modbus_disconnected() -> None:
+    """MB- when last poll failed."""
+    shown_lines: list[list[str]] = []
+
+    class CapturingDisplay:
+        def show(self, lines: list[str]) -> None:
+            shown_lines.append(lines)
+
+    state = ControllerState()  # last_poll_ok defaults to False
+    service = DisplayService(state, lambda: 0, interval=0.05)
+    service._display = CapturingDisplay()  # type: ignore[assignment]
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown_lines) >= 1
+    assert "MB-" in shown_lines[0][1]
 
 
 def test_display_poll_age_no_data() -> None:

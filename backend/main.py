@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.api import control, history, programs, slots, status, ws
+from backend.api import control, history, programs, slots, stats, status, ws
 from backend.config import settings
 from backend.modbus.controller import ControllerInterface
 from backend.modbus.mock_controller import MockController
@@ -95,6 +95,7 @@ app.include_router(control.router, prefix="/api")
 app.include_router(programs.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(slots.router, prefix="/api")
+app.include_router(stats.router, prefix="/api")
 app.include_router(ws.router, prefix="/api")
 
 # Serve frontend static files if built

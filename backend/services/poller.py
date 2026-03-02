@@ -24,6 +24,7 @@ class ControllerState:
     alarm1: bool = False
     alarm2: bool = False
     timestamp: str = ""
+    last_poll_ok: bool = False
     active_program_id: int | None = None
     active_program_name: str | None = None
     _run_started_at: datetime | None = field(default=None, repr=False)
@@ -120,7 +121,9 @@ class Poller:
                 alarm1, alarm2 = self._controller.read_alarm()
 
                 self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm1, alarm2)
+                self._state.last_poll_ok = True
             except Exception:
+                self._state.last_poll_ok = False
                 logger.exception("Polling error")
 
             self._stop_event.wait(self._interval)

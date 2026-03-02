@@ -1,16 +1,17 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { usePrograms } from '../hooks/usePrograms';
 import { ProfileEditor } from '../components/ProfileEditor';
 import type { Segment, Slot } from '../types';
 import { api } from '../api/client';
 
 export function Programs() {
-  const { programs, loading, create, update, remove } = usePrograms();
+  const { programs, loading, refresh, create, update, remove } = usePrograms();
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [segments, setSegments] = useState<Segment[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadSlots = useCallback(() => {
     api.getSlots().then(setSlots).catch(() => {});
@@ -65,43 +66,71 @@ export function Programs() {
     await remove(id);
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await api.importProgram(file);
+      await refresh();
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : err}`);
+    }
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+  };
+
 
   if (loading) {
-    return <div className="text-gray-400">Loading programs...</div>;
+    return <div className="text-gray-500 dark:text-gray-400">Loading programs...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Programs</h2>
-        <button
-          onClick={startNew}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white"
-        >
-          New Program
-        </button>
+        <h2 className="text-xl font-semibold">Programs</h2>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImport}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-sm text-gray-700 dark:text-white"
+          >
+            Import CSV
+          </button>
+          <button
+            onClick={startNew}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white"
+          >
+            New Program
+          </button>
+        </div>
       </div>
 
       {editing !== null ? (
-        <div className="bg-gray-800 rounded-xl p-6 space-y-4">
-          <h3 className="text-lg font-medium text-white">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 space-y-4 shadow-sm dark:shadow-none">
+          <h3 className="text-lg font-medium">
             {editing === 'new' ? 'New Program' : 'Edit Program'}
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Name</label>
+              <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Name</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Description</label>
+              <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Description</label>
               <input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-gray-900 dark:text-white"
               />
             </div>
           </div>
@@ -115,7 +144,7 @@ export function Programs() {
             </button>
             <button
               onClick={() => setEditing(null)}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm text-white"
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-sm text-gray-700 dark:text-white"
             >
               Cancel
             </button>
@@ -124,23 +153,23 @@ export function Programs() {
       ) : (
         <div className="space-y-3">
           {programs.length === 0 ? (
-            <div className="text-gray-500 text-center py-8">
+            <div className="text-gray-400 dark:text-gray-500 text-center py-8">
               No programs yet. Create one to get started.
             </div>
           ) : (
             programs.map((prog) => (
               <div
                 key={prog.id}
-                className="bg-gray-800 rounded-lg p-4 flex items-center justify-between"
+                className="bg-white dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between shadow-sm dark:shadow-none"
               >
                 <div>
-                  <div className="font-medium text-white">{prog.name}</div>
-                  <div className="text-sm text-gray-400">
+                  <div className="font-medium">{prog.name}</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     {prog.segments.length} segments &middot; Updated{' '}
                     {new Date(prog.updated_at).toLocaleDateString()}
                   </div>
                   {prog.description && (
-                    <div className="text-sm text-gray-500 mt-1">{prog.description}</div>
+                    <div className="text-sm text-gray-400 dark:text-gray-500 mt-1">{prog.description}</div>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -163,14 +192,20 @@ export function Programs() {
                     {slots.find((s) => s.slot === 'B')?.program?.id === prog.id ? 'Slot B \u2713' : '\u2192 Slot B'}
                   </button>
                   <button
+                    onClick={() => window.open(`/api/programs/${prog.id}/csv`)}
+                    className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-xs text-gray-700 dark:text-white"
+                  >
+                    Export
+                  </button>
+                  <button
                     onClick={() => startEdit(prog.id)}
-                    className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs text-white"
+                    className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-xs text-gray-700 dark:text-white"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => duplicate(prog.id)}
-                    className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs text-white"
+                    className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded text-xs text-gray-700 dark:text-white"
                   >
                     Duplicate
                   </button>

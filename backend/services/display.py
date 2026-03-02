@@ -226,6 +226,7 @@ class DisplayService:
                 browser = "B+" if browsers > 0 else "B-"
 
                 poll_age = get_poll_age_sec(self._state)
+                modbus = "MB+" if self._state.last_poll_ok else "MB-"
                 if poll_age < 0:
                     poll_str = "Poll: --"
                 else:
@@ -233,7 +234,7 @@ class DisplayService:
 
                 lines = [
                     f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
-                    f"{ip} {wifi} {browser}",
+                    f"{ip} {wifi} {browser} {modbus}",
                     poll_str,
                 ]
                 self._display.show(lines)
