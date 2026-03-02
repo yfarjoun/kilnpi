@@ -24,6 +24,7 @@ class ControllerState:
     alarm1: bool = False
     alarm2: bool = False
     timestamp: str = ""
+    _run_started_at: datetime | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def update(
@@ -38,6 +39,14 @@ class ControllerState:
         alarm2: bool,
     ) -> None:
         with self._lock:
+            # Track when the program started running
+            was_running = self.run_mode == RunMode.RUNNING
+            now_running = run_mode == RunMode.RUNNING
+            if now_running and not was_running:
+                self._run_started_at = datetime.now(UTC)
+            elif not now_running:
+                self._run_started_at = None
+
             self.pv = pv
             self.sp = sp
             self.mv = mv
@@ -50,6 +59,10 @@ class ControllerState:
 
     def snapshot(self) -> dict:
         with self._lock:
+            total_elapsed = 0
+            if self._run_started_at is not None:
+                delta = datetime.now(UTC) - self._run_started_at
+                total_elapsed = int(delta.total_seconds() / 60)
             return {
                 "pv": self.pv,
                 "sp": self.sp,
@@ -57,6 +70,7 @@ class ControllerState:
                 "run_mode": self.run_mode.name.lower(),
                 "segment": self.segment,
                 "segment_elapsed_min": self.segment_elapsed_min,
+                "total_elapsed_min": total_elapsed,
                 "alarm1": self.alarm1,
                 "alarm2": self.alarm2,
                 "timestamp": self.timestamp,

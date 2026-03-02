@@ -23,6 +23,7 @@ def test_controller_state_snapshot() -> None:
     assert snap["alarm1"] is False
     assert snap["alarm2"] is False
     assert snap["timestamp"] != ""
+    assert snap["total_elapsed_min"] >= 0
 
 
 def test_controller_state_default() -> None:
@@ -30,6 +31,31 @@ def test_controller_state_default() -> None:
     snap = state.snapshot()
     assert snap["pv"] == 0.0
     assert snap["run_mode"] == "off"
+    assert snap["total_elapsed_min"] == 0
+
+
+def test_total_elapsed_tracks_run_start() -> None:
+    state = ControllerState()
+    # Not running → total should be 0
+    state.update(
+        pv=25, sp=25, mv=0, run_mode=RunMode.OFF,
+        segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False,
+    )
+    assert state.snapshot()["total_elapsed_min"] == 0
+
+    # Start running → total should start from 0
+    state.update(
+        pv=100, sp=500, mv=50, run_mode=RunMode.RUNNING,
+        segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
+    )
+    assert state.snapshot()["total_elapsed_min"] == 0
+
+    # Stop → total should reset to 0
+    state.update(
+        pv=100, sp=500, mv=0, run_mode=RunMode.OFF,
+        segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False,
+    )
+    assert state.snapshot()["total_elapsed_min"] == 0
 
 
 def test_poller_start_stop() -> None:

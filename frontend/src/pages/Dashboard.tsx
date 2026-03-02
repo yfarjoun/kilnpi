@@ -123,14 +123,18 @@ export function Dashboard() {
           <h3 className="text-lg font-semibold text-white mb-2">
             Program Running{selectedProgramId ? `: ${programs.find((p) => p.id === selectedProgramId)?.name ?? ''}` : ''}
           </h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-gray-400">Segment:</span>{' '}
               <span className="text-white">{status.segment}</span>
             </div>
             <div>
-              <span className="text-gray-400">Elapsed:</span>{' '}
+              <span className="text-gray-400">Seg elapsed:</span>{' '}
               <span className="text-white">{status.segment_elapsed_min} min</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Total elapsed:</span>{' '}
+              <span className="text-white">{status.total_elapsed_min} min</span>
             </div>
           </div>
         </div>

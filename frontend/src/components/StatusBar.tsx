@@ -28,7 +28,7 @@ export function StatusBar({ status }: StatusBarProps) {
       </div>
       {isRunning && (
         <div className="text-gray-400">
-          Segment {status.segment} &middot; {status.segment_elapsed_min}min elapsed
+          Seg {status.segment} &middot; {status.segment_elapsed_min}m &middot; Total {status.total_elapsed_min}m
         </div>
       )}
     </div>
