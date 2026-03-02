@@ -37,8 +37,8 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
   const [dragging, setDragging] = useState<number | null>(null);
   const [svgWidth, setSvgWidth] = useState(600);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Lock the scale during drag to prevent feedback loops
-  const dragScaleRef = useRef<{ maxTime: number; maxTemp: number } | null>(null);
+  // Store the drag start pixel offset to prevent jumps
+  const dragStartRef = useRef<{ offsetY: number; offsetX: number; startTemp: number; startTime: number } | null>(null);
 
   const measuredRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
@@ -59,9 +59,8 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
   const displayMaxTemp = Math.min(MAX_TEMP_DISPLAY, Math.max(200, ...points.map((p) => p.temp)) * 1.15);
   const displayMaxTime = maxTime * 1.1;
 
-  // Use locked scale during drag, otherwise use computed scale
-  const activeMaxTemp = dragScaleRef.current?.maxTemp ?? displayMaxTemp;
-  const activeMaxTime = dragScaleRef.current?.maxTime ?? displayMaxTime;
+  const activeMaxTemp = displayMaxTemp;
+  const activeMaxTime = displayMaxTime;
 
   const plotW = svgWidth - MARGIN.left - MARGIN.right;
   const plotH = CHART_HEIGHT - MARGIN.top - MARGIN.bottom;
@@ -82,21 +81,34 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
 
   const handleMouseDown = (pointIndex: number) => (e: React.MouseEvent) => {
     e.preventDefault();
-    // Lock the scale so it doesn't change mid-drag
-    dragScaleRef.current = { maxTime: activeMaxTime, maxTemp: activeMaxTemp };
+    const point = points[pointIndex];
+    dragStartRef.current = {
+      offsetY: e.clientY,
+      offsetX: e.clientX,
+      startTemp: point.temp,
+      startTime: point.time,
+    };
     setDragging(pointIndex);
   };
 
+  // Pixels per degree C and per minute — based on current scale
+  const pxPerDeg = plotH / activeMaxTemp;
+  const pxPerMin = plotW / activeMaxTime;
+
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (dragging === null || !svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
+    if (dragging === null || !dragStartRef.current) return;
+    const { offsetY, offsetX, startTemp, startTime } = dragStartRef.current;
 
-    // Clamp to plot area
-    const py = Math.max(MARGIN.top, Math.min(MARGIN.top + plotH, e.clientY - rect.top));
-    const px = Math.max(MARGIN.left, Math.min(MARGIN.left + plotW, e.clientX - rect.left));
+    // Delta in pixels
+    const dy = offsetY - e.clientY; // up = positive = hotter
+    const dx = e.clientX - offsetX; // right = positive = later
 
-    const newTemp = Math.max(0, Math.min(1300, Math.round(fromY(py) / 5) * 5));
-    const newTime = Math.max(0, Math.round(fromX(px)));
+    // Convert to value deltas using current scale
+    const deltaDeg = Math.round((dy / pxPerDeg) / 5) * 5;
+    const deltaMin = Math.round(dx / pxPerMin);
+
+    const newTemp = Math.max(0, Math.min(1300, startTemp + deltaDeg));
+    const newTime = Math.max(0, startTime + deltaMin);
 
     const point = points[dragging];
     if (point.segIndex < 0) return;
@@ -104,15 +116,12 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
     const updated = [...segments];
     const seg = { ...updated[point.segIndex] };
 
-    // Calculate time of the point just before this one
     const prevPointTime = dragging > 0 ? points[dragging - 1].time : 0;
 
     if (point.isRampEnd) {
-      // Dragging ramp endpoint: change target_temp and ramp_min
       seg.target_temp = newTemp;
       seg.ramp_min = Math.max(1, newTime - prevPointTime);
     } else {
-      // Dragging soak endpoint: change soak_min (and target_temp to stay in sync)
       seg.target_temp = newTemp;
       seg.soak_min = Math.max(0, newTime - prevPointTime);
     }
@@ -123,7 +132,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
 
   const handleMouseUp = () => {
     setDragging(null);
-    dragScaleRef.current = null;
+    dragStartRef.current = null;
   };
 
   const yTicks = 5;
