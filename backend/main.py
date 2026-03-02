@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     recorder = Recorder(state, interval=settings.poll_interval_sec)
     recorder_task = asyncio.create_task(recorder.run())
 
-    display = DisplayService(interval=5.0)
+    display = DisplayService(state, ws.client_count, interval=5.0)
     display.start()
 
     broadcast_task = asyncio.create_task(

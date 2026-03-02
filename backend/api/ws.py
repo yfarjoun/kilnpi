@@ -23,6 +23,11 @@ def set_state(state: ControllerState) -> None:
     _state = state
 
 
+def client_count() -> int:
+    """Return the number of active WebSocket clients."""
+    return len(_connections)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()

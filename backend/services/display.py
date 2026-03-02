@@ -1,15 +1,19 @@
 """OLED display service — shows Raspberry Pi system info on SSD1306 128x64.
 
-Displays WiFi SSID/signal, CPU temperature, IP address, and uptime.
+Displays disk/memory health, CPU temp, IP address, WiFi and browser
+connection status, and seconds since last Modbus poll.
 Uses luma.oled on Raspberry Pi, falls back to a console-based mock on Mac.
 """
 
 import logging
 import platform
-import re
+import shutil
 import subprocess
 import threading
-import time
+from collections.abc import Callable
+from datetime import UTC, datetime
+
+from backend.services.poller import ControllerState
 
 logger = logging.getLogger(__name__)
 
@@ -55,76 +59,68 @@ def _create_display() -> MockDisplay | OledDisplay:
         return MockDisplay()
 
 
-def get_wifi_info() -> tuple[str, int]:
-    """Return (SSID, signal_percent). Falls back to ('--', 0) on error."""
-    system = platform.system()
+def get_disk_usage_pct() -> int:
+    """Return disk usage percentage for the root filesystem."""
     try:
-        if system == "Darwin":
-            # macOS: use airport command
-            result = subprocess.run(
-                [
-                    "/System/Library/PrivateFrameworks/Apple80211.framework"
-                    "/Versions/Current/Resources/airport",
-                    "-I",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            ssid = "--"
-            rssi = -100
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if line.startswith("SSID:"):
-                    ssid = line.split(":", 1)[1].strip()
-                elif line.startswith("agrCtlRSSI:"):
-                    rssi = int(line.split(":", 1)[1].strip())
-            # Convert RSSI to percentage (rough: -30=100%, -90=0%)
-            signal = max(0, min(100, (rssi + 90) * 100 // 60))
-            return ssid, signal
-        else:
-            # Linux (Raspberry Pi)
-            result = subprocess.run(
-                ["iwgetid", "-r"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            ssid = result.stdout.strip() or "--"
-            # Get signal strength
-            result2 = subprocess.run(
-                ["iwconfig", "wlan0"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            signal = 0
-            match = re.search(r"Signal level=(-?\d+)", result2.stdout)
-            if match:
-                rssi = int(match.group(1))
-                signal = max(0, min(100, (rssi + 90) * 100 // 60))
-            return ssid, signal
+        usage = shutil.disk_usage("/")
+        return int(usage.used * 100 / usage.total)
     except Exception:
-        return "--", 0
+        return 0
+
+
+def get_memory_usage_pct() -> int:
+    """Return memory usage percentage."""
+    try:
+        if platform.system() == "Darwin":
+            # macOS: use vm_stat (rough approximation)
+            result = subprocess.run(
+                ["vm_stat"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            pages_free = 0
+            pages_active = 0
+            pages_spec = 0
+            for line in result.stdout.splitlines():
+                if "Pages free:" in line:
+                    pages_free = int(line.split()[-1].rstrip("."))
+                elif "Pages active:" in line:
+                    pages_active = int(line.split()[-1].rstrip("."))
+                elif "Pages speculative:" in line:
+                    pages_spec = int(line.split()[-1].rstrip("."))
+            total = pages_free + pages_active + pages_spec
+            if total == 0:
+                return 0
+            return int(pages_active * 100 / total)
+        else:
+            # Linux: read /proc/meminfo
+            mem: dict[str, int] = {}
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        mem[parts[0].rstrip(":")] = int(parts[1])
+            total = mem.get("MemTotal", 1)
+            available = mem.get("MemAvailable", 0)
+            return int((total - available) * 100 / total)
+    except Exception:
+        return 0
 
 
 def get_cpu_temp() -> float:
-    """Return CPU temperature in Celsius. Falls back to 0.0 on error."""
-    system = platform.system()
+    """Return CPU temperature in Celsius."""
     try:
-        if system == "Darwin":
-            # macOS doesn't have a simple CPU temp file; return 0
-            return 0.0
-        else:
-            # Linux: read from thermal zone
+        if platform.system() != "Darwin":
             with open("/sys/class/thermal/thermal_zone0/temp") as f:
                 return int(f.read().strip()) / 1000.0
+        return 0.0
     except Exception:
         return 0.0
 
 
 def get_ip_address() -> str:
-    """Return the primary IP address. Falls back to '--' on error."""
+    """Return the primary IP address."""
     try:
         if platform.system() == "Darwin":
             cmd = ["ipconfig", "getifaddr", "en0"]
@@ -136,35 +132,68 @@ def get_ip_address() -> str:
             text=True,
             timeout=3,
         )
-        ip = result.stdout.strip().split()[0] if result.stdout.strip() else "--"
-        return ip
+        parts = result.stdout.strip().split()
+        return parts[0] if parts else "--"
     except Exception:
         return "--"
 
 
-def get_uptime() -> str:
-    """Return uptime as a short human-readable string."""
+def is_wifi_connected() -> bool:
+    """Check if WiFi is connected."""
     try:
-        secs = time.monotonic()
-        # Use process uptime as a proxy (close enough for Pi that starts at boot)
-        if platform.system() != "Darwin":
-            with open("/proc/uptime") as f:
-                secs = float(f.read().split()[0])
-        hours = int(secs) // 3600
-        minutes = (int(secs) % 3600) // 60
-        if hours >= 24:
-            days = hours // 24
-            hours = hours % 24
-            return f"{days}d {hours}h"
-        return f"{hours}h {minutes}m"
+        if platform.system() == "Darwin":
+            result = subprocess.run(
+                [
+                    "/System/Library/PrivateFrameworks"
+                    "/Apple80211.framework"
+                    "/Versions/Current/Resources/airport",
+                    "-I",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            for line in result.stdout.splitlines():
+                if "SSID:" in line and "AirPort" not in line:
+                    return True
+            return False
+        else:
+            result = subprocess.run(
+                ["iwgetid", "-r"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            return bool(result.stdout.strip())
     except Exception:
-        return "--"
+        return False
+
+
+def get_poll_age_sec(state: ControllerState) -> int:
+    """Seconds since the last successful Modbus poll."""
+    snap = state.snapshot()
+    ts = snap.get("timestamp", "")
+    if not ts:
+        return -1
+    try:
+        last = datetime.fromisoformat(ts)
+        age = (datetime.now(UTC) - last).total_seconds()
+        return int(age)
+    except Exception:
+        return -1
 
 
 class DisplayService:
-    """Background thread that updates the OLED display with Pi system info."""
+    """Background thread that updates the OLED display with Pi info."""
 
-    def __init__(self, interval: float = 5.0) -> None:
+    def __init__(
+        self,
+        state: ControllerState,
+        ws_client_count: Callable[[], int],
+        interval: float = 5.0,
+    ) -> None:
+        self._state = state
+        self._ws_client_count = ws_client_count
         self._interval = interval
         self._display = _create_display()
         self._thread: threading.Thread | None = None
@@ -172,7 +201,9 @@ class DisplayService:
 
     def start(self) -> None:
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run, daemon=True, name="display")
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="display",
+        )
         self._thread.start()
         logger.info("Display service started")
 
@@ -185,16 +216,25 @@ class DisplayService:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
-                ssid, signal = get_wifi_info()
-                cpu_temp = get_cpu_temp()
+                disk = get_disk_usage_pct()
+                mem = get_memory_usage_pct()
+                cpu = get_cpu_temp()
+
                 ip = get_ip_address()
-                uptime = get_uptime()
+                wifi = "W+" if is_wifi_connected() else "W-"
+                browsers = self._ws_client_count()
+                browser = "B+" if browsers > 0 else "B-"
+
+                poll_age = get_poll_age_sec(self._state)
+                if poll_age < 0:
+                    poll_str = "Poll: --"
+                else:
+                    poll_str = f"Poll: {poll_age}s ago"
 
                 lines = [
-                    f"WiFi: {ssid[:10]}",
-                    f"Sig: {signal}%  CPU: {cpu_temp:.0f}C",
-                    f"IP: {ip}",
-                    f"Up: {uptime}",
+                    f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
+                    f"{ip} {wifi} {browser}",
+                    poll_str,
                 ]
                 self._display.show(lines)
             except Exception:
