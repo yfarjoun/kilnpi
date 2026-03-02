@@ -80,6 +80,15 @@ export const api = {
   getFiring: (id: number) =>
     request<import('../types').FiringDetail>(`/firings/${id}`),
 
+  deleteFiring: (id: number) =>
+    request<{ ok: boolean }>(`/firings/${id}`, { method: 'DELETE' }),
+
+  updateFiringNotes: (id: number, notes: string) =>
+    request<import('../types').Firing>(`/firings/${id}/notes`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
+    }),
+
   // Slots
   getSlots: () => request<import('../types').Slot[]>('/slots'),
 
@@ -97,4 +106,21 @@ export const api = {
       `/slots/${slot}/fire`,
       { method: 'POST' },
     ),
+
+  // Program CSV import
+  importProgram: async (file: File): Promise<import('../types').Program> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/programs/import`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    return res.json();
+  },
+
+  // Statistics
+  getStatsSummary: () => request<import('../types').FiringSummary>('/stats/summary'),
+
+  getFiringStats: (id: number) =>
+    request<import('../types').FiringStats>(`/stats/firing/${id}`),
+
+  getHealthTrend: () => request<import('../types').HealthTrend[]>('/stats/health'),
 };

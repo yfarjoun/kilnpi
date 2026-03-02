@@ -83,6 +83,10 @@ class FiringDetailResponse(BaseModel):
     readings: list[ReadingResponse]
 
 
+class FiringNotesUpdate(BaseModel):
+    notes: str
+
+
 class AutotuneRequest(BaseModel):
     start: bool = True
 

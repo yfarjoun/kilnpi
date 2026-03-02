@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.dto import FiringDetailResponse, FiringResponse, ReadingResponse
+from backend.dto import FiringDetailResponse, FiringNotesUpdate, FiringResponse, ReadingResponse
 from backend.models.database import get_session
 from backend.models.schemas import Firing, Reading
 
@@ -81,3 +81,30 @@ async def export_firing_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.delete("/firings/{firing_id}")
+async def delete_firing(
+    firing_id: int, session: AsyncSession = Depends(get_session)
+) -> dict:
+    firing = await session.get(Firing, firing_id)
+    if not firing:
+        raise HTTPException(status_code=404, detail="Firing not found")
+    await session.delete(firing)
+    await session.commit()
+    return {"ok": True}
+
+
+@router.patch("/firings/{firing_id}/notes", response_model=FiringResponse)
+async def update_firing_notes(
+    firing_id: int,
+    body: FiringNotesUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> FiringResponse:
+    firing = await session.get(Firing, firing_id)
+    if not firing:
+        raise HTTPException(status_code=404, detail="Firing not found")
+    firing.notes = body.notes
+    await session.commit()
+    await session.refresh(firing)
+    return _firing_to_response(firing)

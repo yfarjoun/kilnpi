@@ -72,3 +72,44 @@ async def test_firing_csv_export(
     lines = content.strip().splitlines()
     assert lines[0].strip() == "timestamp,pv,sp,mv,segment"
     assert len(lines) == 6  # header + 5 readings
+
+
+@pytest.mark.asyncio
+async def test_delete_firing(
+    client: AsyncClient, firing_with_readings: int
+) -> None:
+    resp = await client.delete(f"/api/firings/{firing_with_readings}")
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    # Verify gone
+    resp = await client.get(f"/api/firings/{firing_with_readings}")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_firing_not_found(client: AsyncClient) -> None:
+    resp = await client.delete("/api/firings/99999")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_notes(
+    client: AsyncClient, firing_with_readings: int
+) -> None:
+    resp = await client.patch(
+        f"/api/firings/{firing_with_readings}/notes",
+        json={"notes": "Test glaze — cone 6"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["notes"] == "Test glaze — cone 6"
+    assert data["id"] == firing_with_readings
+    # Verify persisted
+    resp = await client.get(f"/api/firings/{firing_with_readings}")
+    assert resp.json()["firing"]["notes"] == "Test glaze — cone 6"
+
+
+@pytest.mark.asyncio
+async def test_update_notes_not_found(client: AsyncClient) -> None:
+    resp = await client.patch("/api/firings/99999/notes", json={"notes": "nope"})
+    assert resp.status_code == 404
