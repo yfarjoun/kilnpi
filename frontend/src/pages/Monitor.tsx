@@ -12,6 +12,7 @@ export function Monitor() {
 
   useEffect(() => {
     if (status && !paused) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- accumulating streaming WebSocket data
       setReadings((prev) => {
         const newReading: Reading = {
           timestamp: status.timestamp,
