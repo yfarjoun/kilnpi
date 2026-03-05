@@ -1,8 +1,10 @@
-"""OLED display service — shows Raspberry Pi system info on SSD1306 128x64.
+"""OLED display service — shows Raspberry Pi system info on SH1106 128x64.
 
 Displays disk/memory health, CPU temp, IP address, WiFi and browser
 connection status, and seconds since last Modbus poll.
 Uses luma.oled on Raspberry Pi, falls back to a console-based mock on Mac.
+
+Supports drill-down detail views triggered by HAT buttons (KEY1/KEY2/KEY3).
 """
 
 import logging
@@ -14,6 +16,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from backend.modbus.registers import RunMode
+from backend.services.buttons import ButtonState
 from backend.services.poller import ControllerState
 
 logger = logging.getLogger(__name__)
@@ -183,6 +186,42 @@ def get_poll_age_sec(state: ControllerState) -> int:
         return -1
 
 
+def get_uptime() -> str:
+    """Return human-readable uptime string (e.g. '3d 2h')."""
+    try:
+        if platform.system() != "Darwin":
+            with open("/proc/uptime") as f:
+                seconds = float(f.read().split()[0])
+        else:
+            result = subprocess.run(
+                ["sysctl", "-n", "kern.boottime"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            # Output: "{ sec = 1234567890, usec = 0 } ..."
+            import re
+
+            m = re.search(r"sec\s*=\s*(\d+)", result.stdout)
+            if m:
+                import time
+
+                seconds = time.time() - int(m.group(1))
+            else:
+                return "?"
+    except Exception:
+        return "?"
+
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    if days > 0:
+        return f"{days}d {hours}h"
+    minutes = int((seconds % 3600) // 60)
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 class DisplayService:
     """Background thread that updates the OLED display with Pi info."""
 
@@ -191,10 +230,12 @@ class DisplayService:
         state: ControllerState,
         ws_client_count: Callable[[], int],
         interval: float = 5.0,
+        button_state: ButtonState | None = None,
     ) -> None:
         self._state = state
         self._ws_client_count = ws_client_count
         self._interval = interval
+        self._button_state = button_state
         self._display = _create_display()
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -218,43 +259,98 @@ class DisplayService:
     def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
-                disk = get_disk_usage_pct()
-                mem = get_memory_usage_pct()
-                cpu = get_cpu_temp()
-
-                ip = get_ip_address()
-                wifi = "W+" if is_wifi_connected() else "W-"
-                browsers = self._ws_client_count()
-                browser = "B+" if browsers > 0 else "B-"
-
-                poll_age = get_poll_age_sec(self._state)
-                modbus = "MB+" if self._state.last_poll_ok else "MB-"
-                if poll_age < 0:
-                    poll_str = "Poll: --"
+                mode = self._button_state.active_mode() if self._button_state else None
+                if mode == "system":
+                    lines = self._system_detail()
+                elif mode == "network":
+                    lines = self._network_detail()
+                elif mode == "program":
+                    lines = self._program_detail()
                 else:
-                    poll_str = f"Poll: {poll_age}s ago"
-
-                # Line 4: running program info or "Idle"
-                if self._state.run_mode == RunMode.RUNNING:
-                    name = self._state.active_program_name or "Program"
-                    seg = self._state.segment
-                    pv = self._state.pv
-                    sp = self._state.sp
-                    suffix = f"S{seg} {pv:.0f}/{sp:.0f}"
-                    max_name = 21 - len(suffix) - 1
-                    if len(name) > max_name:
-                        name = name[:max_name]
-                    line4 = f"{name} {suffix}"
-                else:
-                    line4 = "Idle"
-
-                lines = [
-                    f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
-                    f"{ip} {wifi} {browser} {modbus}",
-                    poll_str,
-                    line4,
-                ]
+                    lines = self._compact_lines()
                 self._display.show(lines)
             except Exception:
                 logger.exception("Display update error")
             self._stop_event.wait(self._interval)
+
+    def _compact_lines(self) -> list[str]:
+        """Default 4-line compact view."""
+        disk = get_disk_usage_pct()
+        mem = get_memory_usage_pct()
+        cpu = get_cpu_temp()
+
+        ip = get_ip_address()
+        wifi = "W+" if is_wifi_connected() else "W-"
+        browsers = self._ws_client_count()
+        browser = "B+" if browsers > 0 else "B-"
+
+        poll_age = get_poll_age_sec(self._state)
+        modbus = "MB+" if self._state.last_poll_ok else "MB-"
+        if poll_age < 0:
+            poll_str = "Poll: --"
+        else:
+            poll_str = f"Poll: {poll_age}s ago"
+
+        # Line 4: running program info or "Idle"
+        if self._state.run_mode == RunMode.RUNNING:
+            name = self._state.active_program_name or "Program"
+            seg = self._state.segment
+            pv = self._state.pv
+            sp = self._state.sp
+            suffix = f"S{seg} {pv:.0f}/{sp:.0f}"
+            max_name = 21 - len(suffix) - 1
+            if len(name) > max_name:
+                name = name[:max_name]
+            line4 = f"{name} {suffix}"
+        else:
+            line4 = "Idle"
+
+        return [
+            f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
+            f"{ip} {wifi} {browser} {modbus}",
+            poll_str,
+            line4,
+        ]
+
+    def _system_detail(self) -> list[str]:
+        """Expanded system info: disk, memory, CPU temp, uptime."""
+        return [
+            f"Disk: {get_disk_usage_pct()}% used",
+            f"Memory: {get_memory_usage_pct()}% used",
+            f"CPU: {get_cpu_temp():.1f}\u00b0C",
+            f"Uptime: {get_uptime()}",
+        ]
+
+    def _network_detail(self) -> list[str]:
+        """Expanded network info: IP, WiFi, browsers, Modbus."""
+        wifi_str = "Connected" if is_wifi_connected() else "Disconnected"
+        browsers = self._ws_client_count()
+        poll_age = get_poll_age_sec(self._state)
+        if not self._state.last_poll_ok:
+            modbus_str = "Error"
+        elif poll_age < 0:
+            modbus_str = "No data"
+        else:
+            modbus_str = f"OK ({poll_age}s ago)"
+        return [
+            f"IP: {get_ip_address()}",
+            f"WiFi: {wifi_str}",
+            f"Browsers: {browsers}",
+            f"Modbus: {modbus_str}",
+        ]
+
+    def _program_detail(self) -> list[str]:
+        """Expanded program info: name, segment, PV/SP, elapsed."""
+        if self._state.run_mode != RunMode.RUNNING:
+            return ["Prog: --", "No program", "running", ""]
+        name = self._state.active_program_name or "Unknown"
+        seg = self._state.segment
+        pv = self._state.pv
+        sp = self._state.sp
+        elapsed = self._state.segment_elapsed_min
+        return [
+            f"Prog: {name}",
+            f"Segment {seg}",
+            f"PV: {pv:.0f} SP: {sp:.0f}",
+            f"Elapsed: {elapsed} min",
+        ]

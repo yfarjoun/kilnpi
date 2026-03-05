@@ -14,6 +14,7 @@ from backend.config import settings
 from backend.modbus.controller import ControllerInterface
 from backend.modbus.mock_controller import MockController
 from backend.models.database import init_db
+from backend.services.buttons import ButtonState, create_button_service
 from backend.services.display import DisplayService
 from backend.services.poller import ControllerState, Poller
 from backend.services.recorder import Recorder
@@ -59,7 +60,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     recorder = Recorder(state, interval=settings.poll_interval_sec)
     recorder_task = asyncio.create_task(recorder.run())
 
-    display = DisplayService(state, ws.client_count, interval=5.0)
+    button_state = ButtonState()
+    buttons = create_button_service(button_state)
+    buttons.start()
+
+    display = DisplayService(state, ws.client_count, interval=5.0, button_state=button_state)
     display.start()
 
     broadcast_task = asyncio.create_task(
@@ -74,6 +79,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     broadcast_task.cancel()
     recorder_task.cancel()
     display.stop()
+    buttons.stop()
     poller.stop()
     logger.info("All services stopped")
 

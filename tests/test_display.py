@@ -3,6 +3,7 @@
 import time
 from unittest.mock import patch
 
+from backend.services.buttons import ButtonState
 from backend.services.display import (
     DisplayService,
     MockDisplay,
@@ -11,6 +12,7 @@ from backend.services.display import (
     get_ip_address,
     get_memory_usage_pct,
     get_poll_age_sec,
+    get_uptime,
     is_wifi_connected,
 )
 from backend.services.poller import ControllerState
@@ -259,3 +261,138 @@ def test_display_poll_age_no_data() -> None:
 
     assert len(shown_lines) >= 1
     assert "Poll: --" in shown_lines[0][2]
+
+
+# --- Detail mode tests ---
+
+
+def _make_capturing_service(
+    state: ControllerState,
+    button_state: ButtonState,
+    ws_count: int = 0,
+) -> tuple["DisplayService", list[list[str]]]:
+    """Helper: create a DisplayService with a capturing display and button state."""
+    shown: list[list[str]] = []
+
+    class CapturingDisplay:
+        def show(self, lines: list[str]) -> None:
+            shown.append(lines)
+
+    service = DisplayService(
+        state, lambda: ws_count, interval=0.05, button_state=button_state
+    )
+    service._display = CapturingDisplay()  # type: ignore[assignment]
+    return service, shown
+
+
+def test_system_detail_mode() -> None:
+    """KEY1 → expanded system info (disk, memory, CPU, uptime)."""
+    state = ControllerState()
+    bs = ButtonState()
+    bs.press("system")
+
+    service, shown = _make_capturing_service(state, bs)
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown) >= 1
+    lines = shown[0]
+    assert len(lines) == 4
+    assert lines[0].startswith("Disk:")
+    assert lines[1].startswith("Memory:")
+    assert lines[2].startswith("CPU:")
+    assert lines[3].startswith("Uptime:")
+
+
+def test_network_detail_mode() -> None:
+    """KEY2 → expanded network info (IP, WiFi, browsers, Modbus)."""
+    from backend.modbus.registers import RunMode
+
+    state = ControllerState()
+    state.update(pv=100, sp=200, mv=50, run_mode=RunMode.OFF,
+                 segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False)
+    state.last_poll_ok = True
+
+    bs = ButtonState()
+    bs.press("network")
+
+    service, shown = _make_capturing_service(state, bs, ws_count=3)
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown) >= 1
+    lines = shown[0]
+    assert len(lines) == 4
+    assert lines[0].startswith("IP:")
+    assert lines[1].startswith("WiFi:")
+    assert lines[2] == "Browsers: 3"
+    assert lines[3].startswith("Modbus: OK")
+
+
+def test_program_detail_mode_running() -> None:
+    """KEY3 → expanded program info when running."""
+    from backend.modbus.registers import RunMode
+
+    state = ControllerState()
+    state.update(pv=850, sp=900, mv=70, run_mode=RunMode.RUNNING,
+                 segment=1, segment_elapsed_min=45, alarm1=False, alarm2=False)
+    state.active_program_name = "Bisque"
+
+    bs = ButtonState()
+    bs.press("program")
+
+    service, shown = _make_capturing_service(state, bs)
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown) >= 1
+    lines = shown[0]
+    assert len(lines) == 4
+    assert "Bisque" in lines[0]
+    assert "Segment 1" == lines[1]
+    assert "PV: 850" in lines[2]
+    assert "SP: 900" in lines[2]
+    assert "Elapsed: 45 min" == lines[3]
+
+
+def test_program_detail_mode_idle() -> None:
+    """KEY3 when not running → shows 'No program'."""
+    state = ControllerState()
+    bs = ButtonState()
+    bs.press("program")
+
+    service, shown = _make_capturing_service(state, bs)
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown) >= 1
+    assert "No program" in shown[0][1]
+
+
+def test_no_button_state_shows_compact() -> None:
+    """Without ButtonState, display uses compact lines (backward compat)."""
+    shown: list[list[str]] = []
+
+    class CapturingDisplay:
+        def show(self, lines: list[str]) -> None:
+            shown.append(lines)
+
+    state = ControllerState()
+    service = DisplayService(state, lambda: 0, interval=0.05)
+    service._display = CapturingDisplay()  # type: ignore[assignment]
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown) >= 1
+    assert "D:" in shown[0][0]  # compact format
+
+
+def test_get_uptime_returns_string() -> None:
+    result = get_uptime()
+    assert isinstance(result, str)
+    assert len(result) > 0
