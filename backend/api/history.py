@@ -84,9 +84,7 @@ async def export_firing_csv(
 
 
 @router.delete("/firings/{firing_id}")
-async def delete_firing(
-    firing_id: int, session: AsyncSession = Depends(get_session)
-) -> dict:
+async def delete_firing(firing_id: int, session: AsyncSession = Depends(get_session)) -> dict:
     firing = await session.get(Firing, firing_id)
     if not firing:
         raise HTTPException(status_code=404, detail="Firing not found")

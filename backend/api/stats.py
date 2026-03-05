@@ -90,9 +90,7 @@ def _compute_firing_stats(readings: list[Reading]) -> dict:
     for label, low, high in TEMP_BANDS:
         # Find readings in this band during heat-up
         band_readings = [
-            (timestamps[i], pvs[i])
-            for i in range(max_idx + 1)
-            if low <= pvs[i] < high
+            (timestamps[i], pvs[i]) for i in range(max_idx + 1) if low <= pvs[i] < high
         ]
         if len(band_readings) >= 2:
             dt = (band_readings[-1][0] - band_readings[0][0]).total_seconds() / 60
@@ -190,12 +188,14 @@ async def stats_summary(session: AsyncSession = Depends(get_session)) -> dict:
             if max_pv is not None:
                 max_temps.append(max_pv)
 
-        by_program.append({
-            "name": name,
-            "count": count,
-            "avg_duration_min": round(sum(durations) / len(durations), 1) if durations else 0,
-            "avg_max_temp": round(sum(max_temps) / len(max_temps), 1) if max_temps else 0,
-        })
+        by_program.append(
+            {
+                "name": name,
+                "count": count,
+                "avg_duration_min": round(sum(durations) / len(durations), 1) if durations else 0,
+                "avg_max_temp": round(sum(max_temps) / len(max_temps), 1) if max_temps else 0,
+            }
+        )
 
     return {
         "total_firings": total_firings,
@@ -205,9 +205,7 @@ async def stats_summary(session: AsyncSession = Depends(get_session)) -> dict:
 
 
 @router.get("/stats/firing/{firing_id}")
-async def firing_stats(
-    firing_id: int, session: AsyncSession = Depends(get_session)
-) -> dict:
+async def firing_stats(firing_id: int, session: AsyncSession = Depends(get_session)) -> dict:
     firing = await session.get(Firing, firing_id)
     if not firing:
         raise HTTPException(status_code=404, detail="Firing not found")
@@ -236,32 +234,32 @@ async def health_trend(session: AsyncSession = Depends(get_session)) -> list[dic
 
     for firing in reversed(firings):  # chronological order
         readings_result = await session.execute(
-            select(Reading)
-            .where(Reading.firing_id == firing.id)
-            .order_by(Reading.timestamp)
+            select(Reading).where(Reading.firing_id == firing.id).order_by(Reading.timestamp)
         )
         readings = list(readings_result.scalars().all())
         stats = _compute_firing_stats(readings)
 
         for label in band_data:
             if label in stats["heating_rates"]:
-                band_data[label].append({
-                    "firing_id": firing.id,
-                    "date": firing.started_at,
-                    "rate": stats["heating_rates"][label],
-                })
+                band_data[label].append(
+                    {
+                        "firing_id": firing.id,
+                        "date": firing.started_at,
+                        "rate": stats["heating_rates"][label],
+                    }
+                )
 
         if stats["cooling_rate"] > 0:
-            cooling_data.append({
-                "firing_id": firing.id,
-                "date": firing.started_at,
-                "rate": stats["cooling_rate"],
-            })
+            cooling_data.append(
+                {
+                    "firing_id": firing.id,
+                    "date": firing.started_at,
+                    "rate": stats["cooling_rate"],
+                }
+            )
 
     result = [
-        {"band": label, "datapoints": band_data[label]}
-        for label in band_data
-        if band_data[label]
+        {"band": label, "datapoints": band_data[label]} for label in band_data if band_data[label]
     ]
     if cooling_data:
         result.append({"band": "Cooling", "datapoints": cooling_data})

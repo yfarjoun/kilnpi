@@ -10,8 +10,14 @@ from backend.services.poller import ControllerState, Poller
 def test_controller_state_snapshot() -> None:
     state = ControllerState()
     state.update(
-        pv=850.3, sp=900.0, mv=78.5,
-        run_mode=RunMode.RUNNING, segment=5, segment_elapsed_min=12, alarm1=False, alarm2=False,
+        pv=850.3,
+        sp=900.0,
+        mv=78.5,
+        run_mode=RunMode.RUNNING,
+        segment=5,
+        segment_elapsed_min=12,
+        alarm1=False,
+        alarm2=False,
     )
     snap = state.snapshot()
     assert snap["pv"] == 850.3
@@ -38,22 +44,40 @@ def test_total_elapsed_tracks_run_start() -> None:
     state = ControllerState()
     # Not running → total should be 0
     state.update(
-        pv=25, sp=25, mv=0, run_mode=RunMode.OFF,
-        segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=25,
+        sp=25,
+        mv=0,
+        run_mode=RunMode.OFF,
+        segment=0,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     assert state.snapshot()["total_elapsed_min"] == 0
 
     # Start running → total should start from 0
     state.update(
-        pv=100, sp=500, mv=50, run_mode=RunMode.RUNNING,
-        segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=500,
+        mv=50,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     assert state.snapshot()["total_elapsed_min"] == 0
 
     # Stop → total should reset to 0
     state.update(
-        pv=100, sp=500, mv=0, run_mode=RunMode.OFF,
-        segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=500,
+        mv=0,
+        run_mode=RunMode.OFF,
+        segment=0,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     assert state.snapshot()["total_elapsed_min"] == 0
 

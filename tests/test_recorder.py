@@ -30,8 +30,14 @@ async def test_recorder_starts_firing_on_run() -> None:
 
     # Simulate running state
     state.update(
-        pv=100, sp=500, mv=50, run_mode=RunMode.RUNNING,
-        segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=500,
+        mv=50,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
 
     task = asyncio.create_task(recorder.run())
@@ -46,9 +52,7 @@ async def test_recorder_starts_firing_on_run() -> None:
         assert len(firings) >= 1
 
         # Check readings were recorded for this firing
-        result = await session.execute(
-            select(Reading).where(Reading.firing_id == firings[0].id)
-        )
+        result = await session.execute(select(Reading).where(Reading.firing_id == firings[0].id))
         readings = result.scalars().all()
         assert len(readings) >= 1
 
@@ -66,8 +70,14 @@ async def test_recorder_ends_firing_on_stop() -> None:
 
     # Start running
     state.update(
-        pv=100, sp=500, mv=50, run_mode=RunMode.RUNNING,
-        segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=500,
+        mv=50,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
 
     task = asyncio.create_task(recorder.run())
@@ -75,8 +85,14 @@ async def test_recorder_ends_firing_on_stop() -> None:
 
     # Stop
     state.update(
-        pv=100, sp=500, mv=0, run_mode=RunMode.OFF,
-        segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=500,
+        mv=0,
+        run_mode=RunMode.OFF,
+        segment=0,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     await asyncio.sleep(0.15)
 
@@ -103,8 +119,14 @@ async def test_recorder_no_firing_when_idle() -> None:
 
     # Stay idle
     state.update(
-        pv=25, sp=25, mv=0, run_mode=RunMode.OFF,
-        segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=25,
+        sp=25,
+        mv=0,
+        run_mode=RunMode.OFF,
+        segment=0,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
 
     task = asyncio.create_task(recorder.run())

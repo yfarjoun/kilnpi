@@ -203,7 +203,9 @@ class DisplayService:
     def start(self) -> None:
         self._stop_event.clear()
         self._thread = threading.Thread(
-            target=self._run, daemon=True, name="display",
+            target=self._run,
+            daemon=True,
+            name="display",
         )
         self._thread.start()
         logger.info("Display service started")

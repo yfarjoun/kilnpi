@@ -76,9 +76,7 @@ async def _upload_slots_to_controller() -> None:
         _controller.write_program([])
 
 
-def _calculate_start_segment(
-    assignments: dict[str, SlotAssignment | None], slot: str
-) -> int:
+def _calculate_start_segment(assignments: dict[str, SlotAssignment | None], slot: str) -> int:
     """Calculate the 0-based index into the combined program for a slot."""
     if slot == "A":
         return 0

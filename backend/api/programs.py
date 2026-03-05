@@ -82,9 +82,7 @@ async def update_program(
 
 
 @router.delete("/programs/{program_id}")
-async def delete_program(
-    program_id: int, session: AsyncSession = Depends(get_session)
-) -> dict:
+async def delete_program(program_id: int, session: AsyncSession = Depends(get_session)) -> dict:
     program = await session.get(Program, program_id)
     if not program:
         raise HTTPException(status_code=404, detail="Program not found")
@@ -140,17 +138,21 @@ async def import_program_csv(
             data_lines.append(stripped)
 
     if len(data_lines) < 2:
-        raise HTTPException(status_code=400, detail="CSV must have a header row and at least one segment")
+        raise HTTPException(
+            status_code=400, detail="CSV must have a header row and at least one segment"
+        )
 
     reader = csv.DictReader(data_lines)
     segments: list[Segment] = []
     for row in reader:
         try:
-            segments.append(Segment(
-                ramp_min=int(row["ramp_min"]),
-                soak_min=int(row["soak_min"]),
-                target_temp=float(row["target_temp"]),
-            ))
+            segments.append(
+                Segment(
+                    ramp_min=int(row["ramp_min"]),
+                    soak_min=int(row["soak_min"]),
+                    target_temp=float(row["target_temp"]),
+                )
+            )
         except (KeyError, ValueError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV row: {e}")
 

@@ -20,12 +20,8 @@ class Program(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     segments_json: Mapped[str] = mapped_column("segments", String, nullable=False)
-    created_at: Mapped[str] = mapped_column(
-        String, default=lambda: datetime.now(UTC).isoformat()
-    )
-    updated_at: Mapped[str] = mapped_column(
-        String, default=lambda: datetime.now(UTC).isoformat()
-    )
+    created_at: Mapped[str] = mapped_column(String, default=lambda: datetime.now(UTC).isoformat())
+    updated_at: Mapped[str] = mapped_column(String, default=lambda: datetime.now(UTC).isoformat())
 
     firings: Mapped[list[Firing]] = relationship(back_populates="program")
 
@@ -44,9 +40,7 @@ class SlotAssignment(Base):
 
     slot: Mapped[str] = mapped_column(String, primary_key=True)  # "A" or "B"
     program_id: Mapped[int] = mapped_column(ForeignKey("programs.id"), nullable=False)
-    assigned_at: Mapped[str] = mapped_column(
-        String, default=lambda: datetime.now(UTC).isoformat()
-    )
+    assigned_at: Mapped[str] = mapped_column(String, default=lambda: datetime.now(UTC).isoformat())
 
     program: Mapped[Program] = relationship()
 

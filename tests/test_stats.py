@@ -36,7 +36,9 @@ async def firing_with_readings(client: AsyncClient) -> int:
 
         # Simulate heating then cooling: 25 -> 800 -> 200
         temps = (
-            [(base + timedelta(minutes=i * 5), 25 + i * 50, 800.0, 80.0) for i in range(16)]  # heat up
+            [
+                (base + timedelta(minutes=i * 5), 25 + i * 50, 800.0, 80.0) for i in range(16)
+            ]  # heat up
             + [
                 (base + timedelta(minutes=80 + i * 10), 800 - i * 60, 200.0, 0.0)
                 for i in range(1, 11)
@@ -67,9 +69,7 @@ async def test_stats_summary(client: AsyncClient, firing_with_readings: int) -> 
 
 
 @pytest.mark.asyncio
-async def test_stats_summary_by_program(
-    client: AsyncClient, firing_with_readings: int
-) -> None:
+async def test_stats_summary_by_program(client: AsyncClient, firing_with_readings: int) -> None:
     resp = await client.get("/api/stats/summary")
     data = resp.json()
     test_prog = next((p for p in data["by_program"] if p["name"] == "Test Program"), None)
@@ -147,7 +147,9 @@ async def sitter_cutoff_firing(client: AsyncClient) -> int:
         )
         for ts, pv, sp, mv in readings_data:
             session.add(
-                Reading(firing_id=fid, timestamp=ts.isoformat(), pv=float(pv), sp=sp, mv=mv, segment=1)
+                Reading(
+                    firing_id=fid, timestamp=ts.isoformat(), pv=float(pv), sp=sp, mv=mv, segment=1
+                )
             )
         await session.commit()
     return fid
@@ -182,7 +184,14 @@ async def normal_firing(client: AsyncClient) -> int:
         )
         for ts, pv, sp, mv in readings_data:
             session.add(
-                Reading(firing_id=fid, timestamp=ts.isoformat(), pv=float(pv), sp=sp, mv=float(mv), segment=1)
+                Reading(
+                    firing_id=fid,
+                    timestamp=ts.isoformat(),
+                    pv=float(pv),
+                    sp=sp,
+                    mv=float(mv),
+                    segment=1,
+                )
             )
         await session.commit()
     return fid

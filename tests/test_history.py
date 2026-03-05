@@ -39,9 +39,7 @@ async def firing_with_readings(client: AsyncClient) -> int:
 
 
 @pytest.mark.asyncio
-async def test_firings_list_with_data(
-    client: AsyncClient, firing_with_readings: int
-) -> None:
+async def test_firings_list_with_data(client: AsyncClient, firing_with_readings: int) -> None:
     resp = await client.get("/api/firings")
     assert resp.status_code == 200
     data = resp.json()
@@ -50,9 +48,7 @@ async def test_firings_list_with_data(
 
 
 @pytest.mark.asyncio
-async def test_firing_detail(
-    client: AsyncClient, firing_with_readings: int
-) -> None:
+async def test_firing_detail(client: AsyncClient, firing_with_readings: int) -> None:
     resp = await client.get(f"/api/firings/{firing_with_readings}")
     assert resp.status_code == 200
     data = resp.json()
@@ -62,9 +58,7 @@ async def test_firing_detail(
 
 
 @pytest.mark.asyncio
-async def test_firing_csv_export(
-    client: AsyncClient, firing_with_readings: int
-) -> None:
+async def test_firing_csv_export(client: AsyncClient, firing_with_readings: int) -> None:
     resp = await client.get(f"/api/firings/{firing_with_readings}/csv")
     assert resp.status_code == 200
     assert "text/csv" in resp.headers["content-type"]
@@ -75,9 +69,7 @@ async def test_firing_csv_export(
 
 
 @pytest.mark.asyncio
-async def test_delete_firing(
-    client: AsyncClient, firing_with_readings: int
-) -> None:
+async def test_delete_firing(client: AsyncClient, firing_with_readings: int) -> None:
     resp = await client.delete(f"/api/firings/{firing_with_readings}")
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
@@ -93,9 +85,7 @@ async def test_delete_firing_not_found(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_notes(
-    client: AsyncClient, firing_with_readings: int
-) -> None:
+async def test_update_notes(client: AsyncClient, firing_with_readings: int) -> None:
     resp = await client.patch(
         f"/api/firings/{firing_with_readings}/notes",
         json={"notes": "Test glaze — cone 6"},

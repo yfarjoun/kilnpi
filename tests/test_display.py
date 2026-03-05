@@ -79,8 +79,14 @@ def test_get_poll_age_after_update() -> None:
 
     state = ControllerState()
     state.update(
-        pv=100, sp=200, mv=50, run_mode=RunMode.RUNNING,
-        segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=200,
+        mv=50,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     age = get_poll_age_sec(state)
     assert age >= 0
@@ -107,8 +113,14 @@ def test_display_service_formats_lines() -> None:
 
     state = ControllerState()
     state.update(
-        pv=100, sp=200, mv=50, run_mode=RunMode.RUNNING,
-        segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=100,
+        sp=200,
+        mv=50,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     state.last_poll_ok = True
     state.active_program_name = "Bisque"
@@ -167,8 +179,14 @@ def test_display_truncates_long_program_name() -> None:
 
     state = ControllerState()
     state.update(
-        pv=1200, sp=1300, mv=80, run_mode=RunMode.RUNNING,
-        segment=3, segment_elapsed_min=0, alarm1=False, alarm2=False,
+        pv=1200,
+        sp=1300,
+        mv=80,
+        run_mode=RunMode.RUNNING,
+        segment=3,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
     )
     state.active_program_name = "VeryLongProgramName"
 
