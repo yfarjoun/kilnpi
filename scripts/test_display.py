@@ -15,11 +15,17 @@ image = Image.new("1", (device.width, device.height), "white")
 device.display(image)
 time.sleep(2)
 
-# Then: show text on black background
-print("Showing text...")
+# Then: show large filled rectangles and text
+print("Showing pattern...")
 image = Image.new("1", (device.width, device.height), "black")
 draw = ImageDraw.Draw(image)
+# Thick border
 draw.rectangle((0, 0, 127, 63), outline="white")
-draw.text((10, 25), "Hello KilnPi!", fill="white")
+draw.rectangle((2, 2, 125, 61), outline="white")
+# Filled bars at top and bottom
+draw.rectangle((4, 4, 123, 15), fill="white")
+draw.rectangle((4, 48, 123, 59), fill="white")
+# Text in the middle
+draw.text((20, 25), "HELLO KILNPI", fill="white")
 device.display(image)
-print("Done! Display should show text with border.")
+print("Done! Should show bars at top/bottom with text in middle.")
