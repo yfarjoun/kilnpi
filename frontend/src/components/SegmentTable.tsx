@@ -29,6 +29,7 @@ export function SegmentTable({ segments, onChange, readOnly = false }: SegmentTa
           <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
             <th className="py-2 text-left">#</th>
             <th className="py-2 text-left">Ramp (min)</th>
+            <th className="py-2 text-left">&deg;F/hr</th>
             <th className="py-2 text-left">Soak (min)</th>
             <th className="py-2 text-left">Target (&deg;C)</th>
             {!readOnly && <th className="py-2" />}
@@ -47,6 +48,16 @@ export function SegmentTable({ segments, onChange, readOnly = false }: SegmentTa
                     className="w-20 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-white"
                   />
                 )}
+              </td>
+              <td className="py-2 text-gray-500 dark:text-gray-400">
+                {(() => {
+                  const prevTemp = i === 0 ? 25 : segments[i - 1].target_temp;
+                  const deltaCPerMin = seg.ramp_min > 0
+                    ? (seg.target_temp - prevTemp) / seg.ramp_min
+                    : 0;
+                  const fPerHr = deltaCPerMin * (9 / 5) * 60;
+                  return fPerHr !== 0 ? Math.round(fPerHr) : '—';
+                })()}
               </td>
               <td className="py-2">
                 {readOnly ? seg.soak_min : (

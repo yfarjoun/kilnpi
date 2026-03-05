@@ -176,6 +176,34 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
           {/* Profile line */}
           <path d={pathD} fill="none" stroke="#F59E0B" strokeWidth={2} />
 
+          {/* °F/hr labels on ramp lines */}
+          {segments.map((seg, i) => {
+            if (seg.ramp_min <= 0) return null;
+            const prevTemp = i === 0 ? 25 : segments[i - 1].target_temp;
+            const deltaCPerMin = (seg.target_temp - prevTemp) / seg.ramp_min;
+            const fPerHr = Math.round(deltaCPerMin * (9 / 5) * 60);
+            if (fPerHr === 0) return null;
+            // Ramp goes from point index 2*i to 2*i+1 (accounting for origin at index 0)
+            const p0 = points[2 * i];     // start of ramp (origin or prev soak end)
+            const p1 = points[2 * i + 1]; // end of ramp
+            const mx = (toX(p0.time) + toX(p1.time)) / 2;
+            const my = (toY(p0.temp) + toY(p1.temp)) / 2;
+            const angle = Math.atan2(toY(p1.temp) - toY(p0.temp), toX(p1.time) - toX(p0.time)) * (180 / Math.PI);
+            return (
+              <text
+                key={`rate-${i}`}
+                x={mx}
+                y={my - 6}
+                fill="#9CA3AF"
+                fontSize={9}
+                textAnchor="middle"
+                transform={`rotate(${angle}, ${mx}, ${my - 6})`}
+              >
+                {fPerHr}°F/hr
+              </text>
+            );
+          })}
+
           {/* All points as small dots */}
           {points.map((p, i) => (
             <circle key={`pt-${i}`} cx={toX(p.time)} cy={toY(p.temp)} r={3} fill="#F59E0B" />
