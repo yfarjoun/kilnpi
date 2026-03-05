@@ -131,10 +131,10 @@ async def assign_slot(slot: str, req: SlotAssignRequest) -> SlotResponse:
 
     # Return updated slot info
     assignments = await _get_slot_assignments()
-    assignment = assignments[slot]
+    updated: SlotAssignment | None = assignments[slot]
     prog = None
-    if assignment and assignment.program:
-        prog = _program_to_response(assignment.program)
+    if updated and updated.program:
+        prog = _program_to_response(updated.program)
     return SlotResponse(slot=slot, program=prog)
 
 

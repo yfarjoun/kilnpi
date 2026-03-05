@@ -258,9 +258,9 @@ async def health_trend(session: AsyncSession = Depends(get_session)) -> list[dic
                 }
             )
 
-    result = [
+    bands: list[dict] = [
         {"band": label, "datapoints": band_data[label]} for label in band_data if band_data[label]
     ]
     if cooling_data:
-        result.append({"band": "Cooling", "datapoints": cooling_data})
-    return result
+        bands.append({"band": "Cooling", "datapoints": cooling_data})
+    return bands
