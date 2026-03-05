@@ -83,7 +83,7 @@ ssh <username>@<hostname>.local
 
 ```bash
 sudo apt update
-sudo apt install -y git i2c-tools python3-dev libopenjp2-7 libtiff6
+sudo apt install -y git i2c-tools python3-dev libopenjp2-7 libtiff6 nodejs npm
 ```
 
 ### 4. Enable SPI and I2C
@@ -108,20 +108,13 @@ cd kilnpi
 uv sync
 ```
 
-### 7. Build and deploy the frontend
-
-On your Mac/PC (Node.js 20+ required):
+### 7. Build the frontend
 
 ```bash
-cd frontend
+cd ~/kilnpi/frontend
 npm install
 npm run build
-```
-
-Then copy the built files to the Pi:
-
-```bash
-scp -r frontend/dist <username>@<pi-ip>:~/kilnpi/frontend/
+cd ..
 ```
 
 ### 8. Run
