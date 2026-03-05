@@ -13,6 +13,7 @@ dependencies = [
     "python-multipart>=0.0.7",
     "luma.oled>=3.13",
     "gpiozero>=2.0; platform_machine == 'aarch64'",
+    "lgpio>=0.4; platform_machine == 'aarch64'",
     "spidev>=3.6; platform_machine == 'aarch64'",
 ]
 
