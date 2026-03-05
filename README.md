@@ -83,7 +83,7 @@ ssh <username>@<hostname>.local
 
 ```bash
 sudo apt update
-sudo apt install -y git i2c-tools python3-dev libopenjp2-7 libtiff6 nodejs npm
+sudo apt install -y git i2c-tools python3-dev libopenjp2-7 libtiff6 nodejs npm swig
 ```
 
 ### 4. Enable SPI and I2C
