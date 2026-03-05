@@ -96,7 +96,7 @@ def test_display_service_start_stop() -> None:
 
 
 def test_display_service_formats_lines() -> None:
-    """Verify that the display receives 3 lines of Pi info."""
+    """Verify that the display receives 4 lines of Pi info."""
     from backend.modbus.registers import RunMode
 
     shown_lines: list[list[str]] = []
@@ -111,6 +111,7 @@ def test_display_service_formats_lines() -> None:
         segment=1, segment_elapsed_min=0, alarm1=False, alarm2=False,
     )
     state.last_poll_ok = True
+    state.active_program_name = "Bisque"
 
     service = DisplayService(state, lambda: 2, interval=0.05)
     service._display = CapturingDisplay()  # type: ignore[assignment]
@@ -120,7 +121,7 @@ def test_display_service_formats_lines() -> None:
 
     assert len(shown_lines) >= 1
     lines = shown_lines[0]
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "D:" in lines[0]
     assert "M:" in lines[0]
     assert "CPU:" in lines[0]
@@ -128,6 +129,61 @@ def test_display_service_formats_lines() -> None:
     assert "B+" in lines[1]  # lambda returns 2 > 0
     assert "MB+" in lines[1]  # state was updated → poll ok
     assert "Poll:" in lines[2]
+    assert "Bisque" in lines[3]
+    assert "S1" in lines[3]
+    assert "100" in lines[3]  # pv
+    assert "200" in lines[3]  # sp
+
+
+def test_display_shows_idle_when_not_running() -> None:
+    """Line 4 shows 'Idle' when no program running."""
+    shown_lines: list[list[str]] = []
+
+    class CapturingDisplay:
+        def show(self, lines: list[str]) -> None:
+            shown_lines.append(lines)
+
+    state = ControllerState()
+    service = DisplayService(state, lambda: 0, interval=0.05)
+    service._display = CapturingDisplay()  # type: ignore[assignment]
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown_lines) >= 1
+    assert len(shown_lines[0]) == 4
+    assert shown_lines[0][3] == "Idle"
+
+
+def test_display_truncates_long_program_name() -> None:
+    """Long program names get truncated to fit 21 chars."""
+    from backend.modbus.registers import RunMode
+
+    shown_lines: list[list[str]] = []
+
+    class CapturingDisplay:
+        def show(self, lines: list[str]) -> None:
+            shown_lines.append(lines)
+
+    state = ControllerState()
+    state.update(
+        pv=1200, sp=1300, mv=80, run_mode=RunMode.RUNNING,
+        segment=3, segment_elapsed_min=0, alarm1=False, alarm2=False,
+    )
+    state.active_program_name = "VeryLongProgramName"
+
+    service = DisplayService(state, lambda: 0, interval=0.05)
+    service._display = CapturingDisplay()  # type: ignore[assignment]
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown_lines) >= 1
+    line4 = shown_lines[0][3]
+    assert len(line4) <= 21
+    assert "S3" in line4
+    assert "1200" in line4
+    assert "1300" in line4
 
 
 def test_display_shows_browser_disconnected() -> None:

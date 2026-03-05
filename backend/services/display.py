@@ -13,6 +13,7 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from backend.modbus.registers import RunMode
 from backend.services.poller import ControllerState
 
 logger = logging.getLogger(__name__)
@@ -232,10 +233,25 @@ class DisplayService:
                 else:
                     poll_str = f"Poll: {poll_age}s ago"
 
+                # Line 4: running program info or "Idle"
+                if self._state.run_mode == RunMode.RUNNING:
+                    name = self._state.active_program_name or "Program"
+                    seg = self._state.segment
+                    pv = self._state.pv
+                    sp = self._state.sp
+                    suffix = f"S{seg} {pv:.0f}/{sp:.0f}"
+                    max_name = 21 - len(suffix) - 1
+                    if len(name) > max_name:
+                        name = name[:max_name]
+                    line4 = f"{name} {suffix}"
+                else:
+                    line4 = "Idle"
+
                 lines = [
                     f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
                     f"{ip} {wifi} {browser} {modbus}",
                     poll_str,
+                    line4,
                 ]
                 self._display.show(lines)
             except Exception:
