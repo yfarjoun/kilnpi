@@ -65,17 +65,21 @@ class ButtonService:
             logger.warning("RPi.GPIO not available, buttons disabled")
             return
 
-        self._gpio = GPIO
-        GPIO.setmode(GPIO.BCM)
-        for pin, mode in BUTTON_MAP.items():
-            GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            GPIO.add_event_detect(
-                pin,
-                GPIO.FALLING,
-                callback=self._make_callback(mode),
-                bouncetime=300,
-            )
-        logger.info("Button service started (pins: %s)", list(BUTTON_MAP.keys()))
+        try:
+            self._gpio = GPIO
+            GPIO.setmode(GPIO.BCM)
+            for pin, mode in BUTTON_MAP.items():
+                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+                GPIO.add_event_detect(
+                    pin,
+                    GPIO.FALLING,
+                    callback=self._make_callback(mode),
+                    bouncetime=300,
+                )
+            logger.info("Button service started (pins: %s)", list(BUTTON_MAP.keys()))
+        except RuntimeError:
+            logger.warning("GPIO edge detection failed — buttons disabled (try gpiozero?)")
+            self._gpio = None
 
     def stop(self) -> None:
         if self._gpio is not None:
