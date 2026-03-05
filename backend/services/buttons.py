@@ -5,6 +5,7 @@ KEY2 (GPIO 20) → network detail
 KEY3 (GPIO 16) → program detail
 
 Press toggles the detail view; auto-reverts after 10 seconds.
+Uses gpiozero (chardev interface) which works on modern Pi OS (Debian 13+).
 """
 
 import logging
@@ -52,45 +53,39 @@ class ButtonState:
 
 
 class ButtonService:
-    """Background GPIO listener for the 3 HAT buttons (Raspberry Pi only)."""
+    """Background GPIO listener using gpiozero (works on modern Pi OS)."""
 
     def __init__(self, button_state: ButtonState) -> None:
         self._button_state = button_state
-        self._gpio: object | None = None  # RPi.GPIO module, typed as object for Mac compat
+        self._buttons: list[object] = []
 
     def start(self) -> None:
         try:
-            import RPi.GPIO as GPIO  # type: ignore[import-untyped]
+            from gpiozero import Button  # type: ignore[import-untyped]
         except ImportError:
-            logger.warning("RPi.GPIO not available, buttons disabled")
+            logger.warning("gpiozero not available, buttons disabled")
             return
 
         try:
-            self._gpio = GPIO
-            GPIO.setmode(GPIO.BCM)
             for pin, mode in BUTTON_MAP.items():
-                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-                GPIO.add_event_detect(
-                    pin,
-                    GPIO.FALLING,
-                    callback=self._make_callback(mode),
-                    bouncetime=300,
-                )
+                btn = Button(pin, pull_up=True, bounce_time=0.3)
+                btn.when_pressed = self._make_callback(mode)
+                self._buttons.append(btn)
             logger.info("Button service started (pins: %s)", list(BUTTON_MAP.keys()))
-        except RuntimeError:
-            logger.warning("GPIO edge detection failed — buttons disabled (try gpiozero?)")
-            self._gpio = None
+        except Exception:
+            logger.warning("GPIO button setup failed — buttons disabled", exc_info=True)
+            self._buttons = []
 
     def stop(self) -> None:
-        if self._gpio is not None:
-            for pin in BUTTON_MAP:
-                self._gpio.remove_event_detect(pin)
-            self._gpio.cleanup(list(BUTTON_MAP.keys()))
+        for btn in self._buttons:
+            btn.close()  # type: ignore[attr-defined]
+        if self._buttons:
             logger.info("Button service stopped")
+        self._buttons = []
 
     def _make_callback(self, mode: str):  # type: ignore[no-untyped-def]
-        def _cb(channel: int) -> None:
-            logger.debug("Button press: GPIO %d → %s", channel, mode)
+        def _cb() -> None:
+            logger.debug("Button press: %s", mode)
             self._button_state.press(mode)
         return _cb
 
@@ -113,8 +108,8 @@ def create_button_service(button_state: ButtonState) -> ButtonService | MockButt
     if platform.system() == "Darwin":
         return MockButtonService(button_state)
     try:
-        import RPi.GPIO  # type: ignore[import-untyped]  # noqa: F401
+        import gpiozero  # type: ignore[import-untyped]  # noqa: F401
         return ButtonService(button_state)
     except ImportError:
-        logger.warning("RPi.GPIO not available, using mock button service")
+        logger.warning("gpiozero not available, using mock button service")
         return MockButtonService(button_state)
