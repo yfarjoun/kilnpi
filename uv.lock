@@ -932,6 +932,12 @@ wheels = [
 ]
 
 [[package]]
+name = "spidev"
+version = "3.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/67/87/039b6eeea781598015b538691bc174cc0bf77df9d4d2d3b8bf9245c0de8c/spidev-3.8.tar.gz", hash = "sha256:2bc02fb8c6312d519ebf1f4331067427c0921d3f77b8bcaf05189a2e8b8382c0", size = 13893, upload-time = "2025-09-15T18:56:20.672Z" }
+
+[[package]]
 name = "sqlalchemy"
 version = "2.0.47"
 source = { registry = "https://pypi.org/simple" }
@@ -1014,6 +1020,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-multipart" },
     { name = "rpi-gpio", marker = "platform_machine == 'aarch64'" },
+    { name = "spidev", marker = "platform_machine == 'aarch64'" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1043,6 +1050,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.7" },
     { name = "rpi-gpio", marker = "platform_machine == 'aarch64'", specifier = ">=0.7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9" },
+    { name = "spidev", marker = "platform_machine == 'aarch64'", specifier = ">=3.6" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]
