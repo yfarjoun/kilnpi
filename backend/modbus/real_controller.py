@@ -125,10 +125,14 @@ class RealController:
         return int(self._read_reg(registers.TE))
 
     def read_alarm(self) -> tuple[bool, bool]:
-        raw = int(self._read_reg(registers.ALARM_STATUS))
-        alarm1 = bool(raw & 0x01)
-        alarm2 = bool(raw & 0x02)
-        return (alarm1, alarm2)
+        try:
+            raw = int(self._read_reg(registers.ALARM_STATUS))
+            alarm1 = bool(raw & 0x01)
+            alarm2 = bool(raw & 0x02)
+            return (alarm1, alarm2)
+        except Exception:
+            logger.debug("Alarm register (0x1200) not supported by this controller")
+            return (False, False)
 
     def write_start_segment(self, segment: int) -> None:
         self._write_reg(registers.PRO, segment)
