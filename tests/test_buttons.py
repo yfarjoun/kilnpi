@@ -2,7 +2,7 @@
 
 import time
 
-from backend.services.buttons import DETAIL_TIMEOUT, ButtonState, MockButtonService
+from backend.services.buttons import ButtonState, MockButtonService
 
 
 def test_initial_state_is_none() -> None:
