@@ -68,7 +68,7 @@ class ButtonService:
 
         try:
             for pin, mode in BUTTON_MAP.items():
-                btn = Button(pin, pull_up=True, bounce_time=0.3)
+                btn = Button(pin, pull_up=True, bounce_time=0.05)
                 btn.when_pressed = self._make_callback(mode)
                 self._buttons.append(btn)
             logger.info("Button service started (pins: %s)", list(BUTTON_MAP.keys()))
