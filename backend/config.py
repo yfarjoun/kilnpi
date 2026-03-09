@@ -8,9 +8,13 @@ from pathlib import Path
 
 
 def _detect_serial_port() -> str | None:
-    """Try to find a USB-RS485 adapter."""
-    candidates = ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"]
-    for port in candidates:
+    """Try to find a USB-RS485 adapter, preferring stable by-id paths."""
+    by_id = Path("/dev/serial/by-id")
+    if by_id.is_dir():
+        for entry in sorted(by_id.iterdir()):
+            return str(entry)
+    # Fallback to numbered ports
+    for port in ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"]:
         if Path(port).exists():
             return port
     return None
