@@ -271,7 +271,14 @@ class DisplayService:
                 self._display.show(lines)
             except Exception:
                 logger.exception("Display update error")
-            self._stop_event.wait(self._interval)
+            # Poll every 0.5s so button presses feel responsive,
+            # but only redraw at the full interval when in compact mode.
+            elapsed = 0.0
+            while elapsed < self._interval and not self._stop_event.is_set():
+                self._stop_event.wait(0.5)
+                elapsed += 0.5
+                if self._button_state and self._button_state.active_mode() != mode:
+                    break  # button state changed, redraw now
 
     def _compact_lines(self) -> list[str]:
         """Default 4-line compact view."""
