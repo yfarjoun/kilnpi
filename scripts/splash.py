@@ -6,6 +6,7 @@ fills as system services come online. Exits when the main app signals
 readiness via a sentinel file, at which point the app takes over the display.
 """
 
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -64,7 +65,8 @@ for _ in range(120):  # max 60s (120 × 0.5s)
     if SENTINEL.exists():
         draw("Ready!", total, total)
         time.sleep(0.5)
-        break
+        # Skip luma cleanup so the display stays lit until the main app takes over
+        os._exit(0)
 
     # Check each milestone in order
     for i, (unit, label) in enumerate(MILESTONES):
@@ -83,3 +85,6 @@ for _ in range(120):  # max 60s (120 × 0.5s)
 
     draw(current_label, reached, total)
     time.sleep(0.5)
+
+# If we get here (timeout), keep display lit
+os._exit(0)
