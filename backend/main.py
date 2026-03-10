@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.api import control, history, programs, slots, stats, status, ws
-from backend.api.slots import calculate_start_segment, get_slot_assignments
+from backend.api.slots import calculate_pro_offset, get_slot_assignments
 from backend.config import settings
 from backend.modbus.controller import ControllerInterface
 from backend.modbus.mock_controller import MockController
@@ -69,7 +69,7 @@ async def _restore_program_state(state: ControllerState) -> None:
             for slot_name in ("A", "B"):
                 a = assignments[slot_name]
                 if a and a.program_id == firing.program_id:
-                    state._active_slot_offset = calculate_start_segment(assignments, slot_name)
+                    state._pro_offset = calculate_pro_offset(assignments, slot_name)
                     break
 
         logger.info("Restored program state: %s (id=%s)", firing.program_name, firing.program_id)

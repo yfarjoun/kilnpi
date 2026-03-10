@@ -28,7 +28,7 @@ class ControllerState:
     active_program_id: int | None = None
     active_program_name: str | None = None
     _active_segments: list[dict] | None = field(default=None, repr=False)
-    _active_slot_offset: int = field(default=0, repr=False)
+    _pro_offset: int = field(default=1, repr=False)
     _run_started_at: datetime | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -55,7 +55,7 @@ class ControllerState:
                 self.active_program_id = None
                 self.active_program_name = None
                 self._active_segments = None
-                self._active_slot_offset = 0
+                self._pro_offset = 1
 
             self.pv = pv
             self.sp = sp
@@ -75,28 +75,36 @@ class ControllerState:
                 total_elapsed = int(delta.total_seconds() / 60)
 
             # Interpolate the current ramp/soak target from stored program.
-            # During ramp: linearly interpolate between prev and target temp.
-            # During soak: hold at target temp.
+            # Each register segment = 2 PRO values: odd=ramp, even=soak.
             program_target_temp: float | None = None
-            if self._active_segments and self.segment > 0:
-                idx = self.segment - self._active_slot_offset - 1
+            if self._active_segments and self.segment >= self._pro_offset:
+                relative = self.segment - self._pro_offset
+                idx = relative // 2  # program segment index
+                is_ramp = relative % 2 == 0  # odd PRO = ramp, even = soak
                 if 0 <= idx < len(self._active_segments):
                     seg = self._active_segments[idx]
                     target = seg["target_temp"]
-                    ramp_min = seg["ramp_min"]
-                    # Previous segment's target (or 0 for first segment)
-                    if idx > 0:
-                        prev_temp = self._active_segments[idx - 1]["target_temp"]
+                    if is_ramp:
+                        ramp_min = seg["ramp_min"]
+                        if idx > 0:
+                            prev_temp = self._active_segments[idx - 1]["target_temp"]
+                        else:
+                            prev_temp = 0.0
+                        elapsed = self.segment_elapsed_min
+                        if ramp_min > 0 and elapsed < ramp_min:
+                            frac = elapsed / ramp_min
+                            program_target_temp = prev_temp + (target - prev_temp) * frac
+                        else:
+                            program_target_temp = target
                     else:
-                        prev_temp = 0.0
-                    elapsed = self.segment_elapsed_min
-                    if ramp_min > 0 and elapsed < ramp_min:
-                        # Linearly interpolate through the ramp
-                        frac = elapsed / ramp_min
-                        program_target_temp = prev_temp + (target - prev_temp) * frac
-                    else:
-                        # In soak phase (or ramp=0) — hold at target
+                        # Soak phase: hold at target
                         program_target_temp = target
+
+            # User-facing segment number (1-based) from PRO value
+            program_segment: int | None = None
+            if self._active_segments and self.segment >= self._pro_offset:
+                relative = self.segment - self._pro_offset
+                program_segment = relative // 2 + 1  # 1-based
 
             return {
                 "pv": self.pv,
@@ -104,6 +112,7 @@ class ControllerState:
                 "mv": self.mv,
                 "run_mode": self.run_mode.name.lower(),
                 "segment": self.segment,
+                "program_segment": program_segment,
                 "segment_elapsed_min": self.segment_elapsed_min,
                 "total_elapsed_min": total_elapsed,
                 "alarm1": self.alarm1,

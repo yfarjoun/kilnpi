@@ -99,7 +99,7 @@ async def test_fire_slot(client: AsyncClient) -> None:
     assert data["ok"] is True
     assert data["slot"] == "A"
     assert data["program"] == "Fire Test"
-    assert data["start_segment"] == 0
+    assert data["pro_value"] == 0  # PRO=0 = start from beginning
 
     # Stop so other tests aren't affected
     await client.post("/api/program/stop")
@@ -115,8 +115,8 @@ async def test_fire_slot_b_start_segment(client: AsyncClient) -> None:
     resp = await client.post("/api/slots/B/fire")
     assert resp.status_code == 200
     data = resp.json()
-    # Slot B starts after A's 2 segments + 1 end marker = index 3
-    assert data["start_segment"] == 3
+    # Slot B: skip A's 2 segs (4 PRO) + end marker (1 PRO) = PRO 7
+    assert data["pro_value"] == 7
 
     await client.post("/api/program/stop")
 

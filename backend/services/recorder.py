@@ -110,7 +110,7 @@ class Recorder:
                 if snapshot.get("program_target_temp") is not None
                 else snapshot["sp"],
                 mv=snapshot["mv"],
-                segment=snapshot["segment"],
+                segment=snapshot.get("program_segment") or snapshot["segment"],
             )
             session.add(reading)
             await session.commit()

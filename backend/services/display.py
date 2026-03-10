@@ -373,9 +373,9 @@ class DisplayService:
         # Line 4: running/paused program info or "Idle"
         if self._state.run_mode in (RunMode.RUNNING, RunMode.STANDBY):
             name = self._state.active_program_name or "Program"
-            seg = self._state.segment
-            pv = self._state.pv
             snap = self._state.snapshot()
+            seg = snap.get("program_segment") or self._state.segment
+            pv = self._state.pv
             target = snap.get("program_target_temp")
             sp = target if target is not None else self._state.sp
             paused = "||" if self._state.run_mode == RunMode.STANDBY else ""
@@ -426,9 +426,9 @@ class DisplayService:
         if self._state.run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
             return ["Prog: --", "No program", "running", ""]
         name = self._state.active_program_name or "Unknown"
-        seg = self._state.segment
-        pv = self._state.pv
         snap = self._state.snapshot()
+        seg = snap.get("program_segment") or self._state.segment
+        pv = self._state.pv
         target = snap.get("program_target_temp")
         sp = target if target is not None else self._state.sp
         elapsed = self._state.segment_elapsed_min

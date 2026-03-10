@@ -76,15 +76,21 @@ async def _upload_slots_to_controller() -> None:
         _controller.write_program([])
 
 
-def calculate_start_segment(assignments: dict[str, SlotAssignment | None], slot: str) -> int:
-    """Calculate the 0-based index into the combined program for a slot."""
+def calculate_pro_offset(assignments: dict[str, SlotAssignment | None], slot: str) -> int:
+    """Return the first PRO value the controller reports for this slot.
+
+    Each register segment (ramp+soak+temp) maps to 2 PRO values:
+    odd PRO = ramp phase, even PRO = soak phase.
+    The end marker between slots counts as 1 PRO step.
+    """
     if slot == "A":
-        return 0
-    # Slot B starts after slot A's segments + end marker
+        return 1
+    # Slot B: skip A's phases (2 per segment) + end marker (1 PRO step)
     a = assignments["A"]
     if a and a.program:
-        return len(a.program.segments) + 1  # +1 for end marker
-    return 0
+        n = len(a.program.segments)
+        return 2 * n + 3  # 2N (A phases) + 1 (end marker) + 2 (to B's ramp)
+    return 1  # No slot A → B starts from beginning
 
 
 @router.get("", response_model=list[SlotResponse])
@@ -184,15 +190,17 @@ async def fire_slot(slot: str) -> dict:
     _state.active_program_name = assignment.program.name
     _state._active_segments = [dict(s) for s in assignment.program.segments]
 
-    # Calculate starting segment and fire
-    start_seg = calculate_start_segment(assignments, slot)
-    _state._active_slot_offset = start_seg
-    _controller.write_start_segment(start_seg)
+    # Calculate PRO register value and fire
+    pro_offset = calculate_pro_offset(assignments, slot)
+    _state._pro_offset = pro_offset
+    # PRO=0 is "start from beginning" for slot A; for B, write the exact value
+    pro_write = 0 if slot == "A" else pro_offset
+    _controller.write_start_segment(pro_write)
     _controller.start_program()
 
     return {
         "ok": True,
         "slot": slot,
         "program": assignment.program.name,
-        "start_segment": start_seg,
+        "pro_value": pro_write,
     }

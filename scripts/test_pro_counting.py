@@ -42,9 +42,7 @@ def main() -> None:
         time.sleep(DELAY)
         return inst.read_register(addr, decimals, signed=signed)
 
-    def write_reg(
-        addr: int, value: int | float, decimals: int = 0, signed: bool = False
-    ) -> None:
+    def write_reg(addr: int, value: int | float, decimals: int = 0, signed: bool = False) -> None:
         time.sleep(DELAY)
         inst.write_register(addr, value, decimals, functioncode=6, signed=signed)
 
