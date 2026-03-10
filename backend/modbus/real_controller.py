@@ -100,12 +100,20 @@ class RealController:
             return segments
 
     def _raw_write(
-        self, address: int, value: int | float, decimals: int = 0, signed: bool = False,
+        self,
+        address: int,
+        value: int | float,
+        decimals: int = 0,
+        signed: bool = False,
     ) -> None:
         """Write a single register using function code 6."""
         self._throttle()
         self._instrument.write_register(
-            address, value, decimals, functioncode=6, signed=signed,
+            address,
+            value,
+            decimals,
+            functioncode=6,
+            signed=signed,
         )
 
     def write_program(self, segments: list[Segment]) -> None:
@@ -116,7 +124,10 @@ class RealController:
                 self._raw_write(registers.segment_ramp_addr(i), seg.ramp_min)
                 self._raw_write(registers.segment_soak_addr(i), seg.soak_min)
                 self._raw_write(
-                    registers.segment_temp_addr(i), seg.target_temp, decimals=1, signed=True,
+                    registers.segment_temp_addr(i),
+                    seg.target_temp,
+                    decimals=1,
+                    signed=True,
                 )
             # Terminate with ramp=0 in the next segment
             next_seg = len(segments) + 1

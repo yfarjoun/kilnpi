@@ -68,7 +68,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     buttons.start()
 
     display = DisplayService(
-        state, ws.client_count, interval=5.0, button_state=button_state, display=oled,
+        state,
+        ws.client_count,
+        interval=5.0,
+        button_state=button_state,
+        display=oled,
     )
     display.start()
 

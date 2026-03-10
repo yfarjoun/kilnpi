@@ -62,6 +62,7 @@ def _create_display() -> MockDisplay | OledDisplay:
         except Exception as exc:
             if attempt < 2:
                 import time
+
                 logger.info("OLED init attempt %d failed (%s), retrying...", attempt + 1, exc)
                 time.sleep(1)
             else:
@@ -80,7 +81,6 @@ def create_display_and_splash() -> MockDisplay | OledDisplay:
     display.show(["", "    KilnPi", "", "    Starting..."])
     logger.info("Splash screen shown")
     return display
-
 
 
 def get_disk_usage_pct() -> int:
