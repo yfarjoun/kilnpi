@@ -25,7 +25,12 @@ logger = logging.getLogger(__name__)
 class MockDisplay:
     """Console-based mock for development without hardware."""
 
-    def show(self, lines: list[str], reversed_lines: set[int] | None = None) -> None:
+    def show(
+        self,
+        lines: list[str],
+        reversed_lines: set[int] | None = None,
+        bold_lines: set[int] | None = None,
+    ) -> None:
         logger.debug("OLED: %s", " | ".join(lines))
 
 
@@ -40,31 +45,39 @@ class OledDisplay:
         serial = spi(device=0, port=0, gpio_DC=24, gpio_RST=25)
         self._device = sh1106(serial)
         self._device.contrast(255)
-        # Try DejaVu Sans Mono (10px) for readability; fall back to default
-        self._font = ImageFont.load_default()
-        for path in (
-            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
-        ):
-            try:
-                self._font = ImageFont.truetype(path, 10)
-                break
-            except OSError:
-                continue
+        # Load regular and bold DejaVu Sans Mono (10px); fall back to default
+        default = ImageFont.load_default()
+        self._font = default
+        self._font_bold = default
+        font_dir = "/usr/share/fonts/truetype/dejavu"
+        try:
+            self._font = ImageFont.truetype(f"{font_dir}/DejaVuSansMono.ttf", 10)
+        except OSError:
+            pass
+        try:
+            self._font_bold = ImageFont.truetype(f"{font_dir}/DejaVuSansMono-Bold.ttf", 10)
+        except OSError:
+            self._font_bold = self._font  # fall back to regular
 
-    def show(self, lines: list[str], reversed_lines: set[int] | None = None) -> None:
+    def show(
+        self,
+        lines: list[str],
+        reversed_lines: set[int] | None = None,
+        bold_lines: set[int] | None = None,
+    ) -> None:
         from luma.core.render import canvas  # type: ignore[import-untyped]
 
         with canvas(self._device) as draw:
             y = 0
             line_h = 14
             for i, line in enumerate(lines):
+                font = self._font_bold if bold_lines and i in bold_lines else self._font
                 if reversed_lines and i in reversed_lines:
-                    # White background, black text for emphasis
+                    # White background, black text for error emphasis
                     draw.rectangle([(0, y), (self._device.width, y + line_h)], fill="white")
-                    draw.text((0, y), line, fill="black", font=self._font)
+                    draw.text((0, y), line, fill="black", font=font)
                 else:
-                    draw.text((0, y), line, fill="white", font=self._font)
+                    draw.text((0, y), line, fill="white", font=font)
                 y += line_h
 
 
@@ -299,28 +312,33 @@ class DisplayService:
         while not self._stop_event.is_set():
             try:
                 mode = self._button_state.active_mode() if self._button_state else None
-                reversed_lines: set[int] = set()
+                reversed_lines: set[int] = set()  # inverse: error states
+                bold_lines: set[int] = set()  # bold: variable/changing data
                 if mode == "system":
                     lines = self._system_detail()
                 elif mode == "network":
                     lines = self._network_detail()
-                    # Highlight Modbus line when there's an error
+                    # Inverse Modbus line on error
                     if not self._state.last_poll_ok:
                         reversed_lines.add(3)
                 elif mode == "program":
                     lines = self._program_detail()
-                    # Highlight the live PV/SP line when program is active
+                    # Bold the live PV/SP line when program is active
                     if self._state.run_mode in (RunMode.RUNNING, RunMode.STANDBY):
-                        reversed_lines.add(2)
+                        bold_lines.add(2)
                 else:
                     lines = self._compact_lines()
-                    # Highlight running program info (variable data)
+                    # Bold running program info (variable data)
                     if self._state.run_mode in (RunMode.RUNNING, RunMode.STANDBY):
-                        reversed_lines.add(3)
-                    # Highlight connectivity line on Modbus error
+                        bold_lines.add(3)
+                    # Inverse connectivity line on Modbus error
                     if not self._state.last_poll_ok:
                         reversed_lines.add(1)
-                self._display.show(lines, reversed_lines=reversed_lines or None)
+                self._display.show(
+                    lines,
+                    reversed_lines=reversed_lines or None,
+                    bold_lines=bold_lines or None,
+                )
             except Exception:
                 logger.exception("Display update error")
             # Poll every 0.5s so button presses feel responsive,

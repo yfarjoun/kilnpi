@@ -111,7 +111,8 @@ def main() -> None:
             temp = inst.read_register(registers.segment_temp_addr(i), 1, signed=True)
         except Exception as e:
             temp = f"ERR({e})"
-        print(f"  {i:>2}  0x{registers.segment_ramp_addr(i):04X}      {ramp:>5}  {soak:>5}  {temp:>7}")
+        addr_hex = f"0x{registers.segment_ramp_addr(i):04X}"
+        print(f"  {i:>2}  {addr_hex}      {ramp:>5}  {soak:>5}  {temp:>7}")
 
     # Scan for undocumented registers in the 0x1000-0x1300 range
     print()
@@ -123,7 +124,12 @@ def main() -> None:
             # Also try with decimal
             val_dec = inst.read_register(addr, 1, signed=True)
             # Skip if raw is 0 and not a known register (reduce noise)
-            known = addr in (registers.PV.address, registers.MV.address, registers.ALARM_STATUS.address)
+            known_addrs = (
+                registers.PV.address,
+                registers.MV.address,
+                registers.ALARM_STATUS.address,
+            )
+            known = addr in known_addrs
             if raw != 0 or known:
                 print(f"  0x{addr:04X}  raw={raw:>6}  decimal={val_dec:>10}")
         except Exception:
