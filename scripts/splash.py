@@ -6,7 +6,6 @@ fills as system services come online. Exits when the main app signals
 readiness via a sentinel file, at which point the app takes over the display.
 """
 
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -29,8 +28,8 @@ MILESTONES = [
     ("multi-user.target", "Services"),
 ]
 
-serial = spi(device=0, port=0, gpio_DC=24, gpio_RST=25)
-device = sh1106(serial)
+serial_conn = spi(device=0, port=0, gpio_DC=24, gpio_RST=25)
+device = sh1106(serial_conn)
 device.contrast(255)
 font = ImageFont.load_default()
 
@@ -56,8 +55,18 @@ def draw(label: str, done: int, total: int) -> None:
         draw_ctx.text((0, 42), f" {label}...", fill="white", font=font)
 
 
+def cleanup_without_blanking() -> None:
+    """Release SPI/GPIO without clearing the screen.
+
+    luma's default cleanup blanks the display. We disable that so the last
+    frame stays visible, then manually close the serial connection to
+    release the SPI device for the main app.
+    """
+    device.cleanup = lambda *args, **kwargs: None  # type: ignore[assignment]
+    serial_conn.cleanup()
+
+
 total = len(MILESTONES) + 1  # +1 for "Ready"
-reached = 0
 
 # Track which milestones have been reached (they stay reached)
 milestone_done = [False] * len(MILESTONES)
@@ -66,8 +75,8 @@ for _ in range(120):  # max 60s (120 × 0.5s)
     if SENTINEL.exists():
         draw("Ready!", total, total)
         time.sleep(0.5)
-        # Skip luma cleanup so the display stays lit until the main app takes over
-        os._exit(0)
+        cleanup_without_blanking()
+        break
 
     # Check each milestone in order
     for i, (unit, label) in enumerate(MILESTONES):
@@ -86,6 +95,6 @@ for _ in range(120):  # max 60s (120 × 0.5s)
 
     draw(current_label, reached, total)
     time.sleep(0.5)
-
-# If we get here (timeout), keep display lit
-os._exit(0)
+else:
+    # Timeout — release resources but keep display lit
+    cleanup_without_blanking()
