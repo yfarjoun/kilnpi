@@ -40,7 +40,7 @@ def _program_to_response(prog: Program) -> ProgramResponse:
     )
 
 
-async def _get_slot_assignments() -> dict[str, SlotAssignment | None]:
+async def get_slot_assignments() -> dict[str, SlotAssignment | None]:
     """Load both slot assignments from DB."""
     async with async_session() as session:
         result = await session.execute(
@@ -58,7 +58,7 @@ async def _get_slot_assignments() -> dict[str, SlotAssignment | None]:
 async def _upload_slots_to_controller() -> None:
     """Build combined segment list from both slots and write to controller."""
     assert _controller is not None
-    assignments = await _get_slot_assignments()
+    assignments = await get_slot_assignments()
 
     combined: list[Segment] = []
     for slot_name in ("A", "B"):
@@ -76,7 +76,7 @@ async def _upload_slots_to_controller() -> None:
         _controller.write_program([])
 
 
-def _calculate_start_segment(assignments: dict[str, SlotAssignment | None], slot: str) -> int:
+def calculate_start_segment(assignments: dict[str, SlotAssignment | None], slot: str) -> int:
     """Calculate the 0-based index into the combined program for a slot."""
     if slot == "A":
         return 0
@@ -89,7 +89,7 @@ def _calculate_start_segment(assignments: dict[str, SlotAssignment | None], slot
 
 @router.get("", response_model=list[SlotResponse])
 async def get_slots() -> list[SlotResponse]:
-    assignments = await _get_slot_assignments()
+    assignments = await get_slot_assignments()
     result: list[SlotResponse] = []
     for slot_name in VALID_SLOTS:
         assignment = assignments[slot_name]
@@ -130,7 +130,7 @@ async def assign_slot(slot: str, req: SlotAssignRequest) -> SlotResponse:
     await _upload_slots_to_controller()
 
     # Return updated slot info
-    assignments = await _get_slot_assignments()
+    assignments = await get_slot_assignments()
     updated: SlotAssignment | None = assignments[slot]
     prog = None
     if updated and updated.program:
@@ -171,7 +171,7 @@ async def fire_slot(slot: str) -> dict:
         raise HTTPException(409, "A program is already running")
 
     # Look up slot assignment
-    assignments = await _get_slot_assignments()
+    assignments = await get_slot_assignments()
     assignment = assignments[slot]
     if not assignment or not assignment.program:
         raise HTTPException(400, f"Slot {slot} has no program assigned")
@@ -185,7 +185,7 @@ async def fire_slot(slot: str) -> dict:
     _state._active_segments = [dict(s) for s in assignment.program.segments]
 
     # Calculate starting segment and fire
-    start_seg = _calculate_start_segment(assignments, slot)
+    start_seg = calculate_start_segment(assignments, slot)
     _state._active_slot_offset = start_seg
     _controller.write_start_segment(start_seg)
     _controller.start_program()

@@ -49,7 +49,7 @@ class ControllerState:
             now_running = run_mode == RunMode.RUNNING
             if now_running and not was_running:
                 self._run_started_at = datetime.now(UTC)
-            elif not now_running:
+            elif not now_running and was_running:
                 self._run_started_at = None
                 self.active_program_id = None
                 self.active_program_name = None
@@ -136,8 +136,14 @@ class Poller:
 
                 self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm1, alarm2)
                 self._state.last_poll_ok = True
-            except Exception:
+            except Exception as exc:
                 self._state.last_poll_ok = False
                 logger.exception("Polling error")
+                # USB disconnect leaves a stale fd — try to reconnect
+                if isinstance(exc, OSError) and hasattr(self._controller, "reconnect"):
+                    try:
+                        self._controller.reconnect()  # type: ignore[attr-defined]
+                    except Exception:
+                        logger.exception("Reconnect failed")
 
             self._stop_event.wait(self._interval)

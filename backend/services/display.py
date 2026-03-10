@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class MockDisplay:
     """Console-based mock for development without hardware."""
 
-    def show(self, lines: list[str]) -> None:
+    def show(self, lines: list[str], reversed_lines: set[int] | None = None) -> None:
         logger.debug("OLED: %s", " | ".join(lines))
 
 
@@ -40,16 +40,32 @@ class OledDisplay:
         serial = spi(device=0, port=0, gpio_DC=24, gpio_RST=25)
         self._device = sh1106(serial)
         self._device.contrast(255)
+        # Try DejaVu Sans Mono (10px) for readability; fall back to default
         self._font = ImageFont.load_default()
+        for path in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+        ):
+            try:
+                self._font = ImageFont.truetype(path, 10)
+                break
+            except OSError:
+                continue
 
-    def show(self, lines: list[str]) -> None:
+    def show(self, lines: list[str], reversed_lines: set[int] | None = None) -> None:
         from luma.core.render import canvas  # type: ignore[import-untyped]
 
         with canvas(self._device) as draw:
             y = 0
-            for line in lines:
-                draw.text((0, y), line, fill="white", font=self._font)
-                y += 14
+            line_h = 14
+            for i, line in enumerate(lines):
+                if reversed_lines and i in reversed_lines:
+                    # White background, black text for emphasis
+                    draw.rectangle([(0, y), (self._device.width, y + line_h)], fill="white")
+                    draw.text((0, y), line, fill="black", font=self._font)
+                else:
+                    draw.text((0, y), line, fill="white", font=self._font)
+                y += line_h
 
 
 def _create_display() -> MockDisplay | OledDisplay:
@@ -283,15 +299,22 @@ class DisplayService:
         while not self._stop_event.is_set():
             try:
                 mode = self._button_state.active_mode() if self._button_state else None
+                reversed_lines: set[int] | None = None
                 if mode == "system":
                     lines = self._system_detail()
+                    reversed_lines = {0}
                 elif mode == "network":
                     lines = self._network_detail()
+                    reversed_lines = {0}
                 elif mode == "program":
                     lines = self._program_detail()
+                    reversed_lines = {0}
                 else:
                     lines = self._compact_lines()
-                self._display.show(lines)
+                    # Reverse the status line when a program is running
+                    if self._state.run_mode == RunMode.RUNNING:
+                        reversed_lines = {3}
+                self._display.show(lines, reversed_lines=reversed_lines)
             except Exception:
                 logger.exception("Display update error")
             # Poll every 0.5s so button presses feel responsive,

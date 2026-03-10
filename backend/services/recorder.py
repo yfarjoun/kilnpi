@@ -4,6 +4,8 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+
 from backend.models.database import async_session
 from backend.models.schemas import Firing, Reading
 from backend.services.poller import ControllerState
@@ -19,6 +21,31 @@ class Recorder:
         self._interval = interval
         self._current_firing_id: int | None = None
         self._was_running = False
+
+    async def recover_from_restart(self) -> None:
+        """Resume or close stale 'running' firings left by a previous process."""
+        async with async_session() as session:
+            result = await session.execute(
+                select(Firing).where(Firing.status == "running").order_by(Firing.id.desc()).limit(1)
+            )
+            stale = result.scalar_one_or_none()
+            if stale is None:
+                return
+
+            snapshot = self._state.snapshot()
+            is_running = snapshot["run_mode"] == "running"
+
+            if is_running and self._state.last_poll_ok:
+                # Controller is still running — resume recording into existing firing
+                self._current_firing_id = stale.id
+                self._was_running = True
+                logger.info("Resumed firing #%d after restart", stale.id)
+            else:
+                # Controller not running (or no poll yet) — close the stale firing
+                stale.ended_at = datetime.now(UTC).isoformat()
+                stale.status = "completed"
+                await session.commit()
+                logger.info("Closed stale firing #%d after restart", stale.id)
 
     async def run(self) -> None:
         """Main recording loop — runs as an asyncio task."""

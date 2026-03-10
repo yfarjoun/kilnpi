@@ -110,7 +110,7 @@ def test_display_service_formats_lines() -> None:
     shown_lines: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown_lines.append(lines)
 
     state = ControllerState()
@@ -154,7 +154,7 @@ def test_display_shows_idle_when_not_running() -> None:
     shown_lines: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown_lines.append(lines)
 
     state = ControllerState()
@@ -176,7 +176,7 @@ def test_display_truncates_long_program_name() -> None:
     shown_lines: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown_lines.append(lines)
 
     state = ControllerState()
@@ -211,7 +211,7 @@ def test_display_shows_browser_disconnected() -> None:
     shown_lines: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown_lines.append(lines)
 
     state = ControllerState()
@@ -230,7 +230,7 @@ def test_display_modbus_disconnected() -> None:
     shown_lines: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown_lines.append(lines)
 
     state = ControllerState()  # last_poll_ok defaults to False
@@ -249,7 +249,7 @@ def test_display_poll_age_no_data() -> None:
     shown_lines: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown_lines.append(lines)
 
     state = ControllerState()  # no update → no timestamp
@@ -275,7 +275,7 @@ def _make_capturing_service(
     shown: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown.append(lines)
 
     service = DisplayService(state, lambda: ws_count, interval=0.05, button_state=button_state)
@@ -392,7 +392,7 @@ def test_no_button_state_shows_compact() -> None:
     shown: list[list[str]] = []
 
     class CapturingDisplay:
-        def show(self, lines: list[str]) -> None:
+        def show(self, lines: list[str], **kwargs: object) -> None:
             shown.append(lines)
 
     state = ControllerState()

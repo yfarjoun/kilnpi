@@ -44,6 +44,8 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
     startTemp: number; startTime: number;
     dragAxis: 'x' | 'y' | null;
   } | null>(null);
+  // Snapshot of segments at drag start — used to revert on Esc
+  const savedSegmentsRef = useRef<Segment[] | null>(null);
 
   const measuredRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
@@ -84,6 +86,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
   const handleMouseDown = (pointIndex: number) => (e: React.MouseEvent) => {
     e.preventDefault();
     const point = points[pointIndex];
+    savedSegmentsRef.current = segments.map((s) => ({ ...s }));
     dragStartRef.current = {
       offsetY: e.clientY,
       offsetX: e.clientX,
@@ -92,6 +95,8 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
       dragAxis: null,
     };
     setDragging(pointIndex);
+    // Focus wrapper so it can receive keyboard events
+    containerRef.current?.focus();
   };
 
   // Pixels per degree C and per minute — based on current scale
@@ -152,6 +157,17 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
     setDragging(null);
     setDragAxis(null);
     dragStartRef.current = null;
+    savedSegmentsRef.current = null;
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape' && dragging !== null && savedSegmentsRef.current) {
+      onChange(savedSegmentsRef.current);
+      setDragging(null);
+      setDragAxis(null);
+      dragStartRef.current = null;
+      savedSegmentsRef.current = null;
+    }
   };
 
   const yTicks = 5;
@@ -172,7 +188,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4" ref={measuredRef}>
+      <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4" ref={measuredRef} tabIndex={0} style={{ outline: 'none' }} onKeyDown={handleKeyDown}>
         <svg
           ref={svgRef}
           width={svgWidth}
@@ -287,7 +303,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
           ))}
         </svg>
         <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-          Drag points to adjust &mdash; movement locks to one axis: vertical for temperature, horizontal for timing
+          Drag points to adjust &mdash; movement locks to one axis. Press Esc to cancel
         </div>
       </div>
       <SegmentTable segments={segments} onChange={onChange} />

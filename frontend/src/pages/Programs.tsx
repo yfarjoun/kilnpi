@@ -12,6 +12,7 @@ export function Programs() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [assignMessage, setAssignMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadSlots = useCallback(async () => {
@@ -30,6 +31,8 @@ export function Programs() {
     try {
       await api.assignSlot(slot, programId);
       await loadSlots();
+      setAssignMessage(`Written to controller (Slot ${slot})`);
+      setTimeout(() => setAssignMessage(''), 3000);
     } catch (err) {
       alert(`Failed to assign slot ${slot}: ${err instanceof Error ? err.message : err}`);
     } finally {
@@ -123,6 +126,10 @@ export function Programs() {
           </button>
         </div>
       </div>
+
+      {assignMessage && (
+        <div className="text-sm text-green-600 dark:text-green-400">{assignMessage}</div>
+      )}
 
       {editing !== null ? (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 space-y-4 shadow-sm dark:shadow-none">

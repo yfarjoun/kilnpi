@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import type { PIDParams } from '../types';
+import type { PIDParams, Segment } from '../types';
 
 export function Settings() {
   const [pid, setPid] = useState<PIDParams | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [controllerSegments, setControllerSegments] = useState<Segment[] | null>(null);
+  const [loadingSegments, setLoadingSegments] = useState(false);
 
   useEffect(() => {
     api.getPID()
@@ -28,6 +30,18 @@ export function Settings() {
       setMessage('Failed to save PID parameters');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const readControllerProgram = async () => {
+    setLoadingSegments(true);
+    try {
+      const segs = await api.getControllerProgram();
+      setControllerSegments(segs);
+    } catch {
+      setControllerSegments([]);
+    } finally {
+      setLoadingSegments(false);
     }
   };
 
@@ -115,6 +129,47 @@ export function Settings() {
         >
           Start Auto-Tune
         </button>
+      </div>
+
+      {/* Controller Program */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 space-y-4 shadow-sm dark:shadow-none">
+        <h3 className="text-lg font-medium">Controller Program</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Programs are uploaded automatically when assigned to slots.
+        </p>
+        <button
+          onClick={readControllerProgram}
+          disabled={loadingSegments}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-300 dark:disabled:bg-gray-700 rounded text-sm text-white"
+        >
+          {loadingSegments ? 'Reading...' : 'Read from Controller'}
+        </button>
+        {controllerSegments !== null && (
+          controllerSegments.length === 0 ? (
+            <p className="text-sm text-gray-400">No segments on controller.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                  <th className="py-1 pr-4">#</th>
+                  <th className="py-1 pr-4">Ramp (min)</th>
+                  <th className="py-1 pr-4">Soak (min)</th>
+                  <th className="py-1">Target (°C)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {controllerSegments.filter((s) => s.ramp_min > 0).map((seg, i) => (
+                  <tr key={i} className="border-b border-gray-100 dark:border-gray-700">
+                    <td className="py-1 pr-4">{i + 1}</td>
+                    <td className="py-1 pr-4">{seg.ramp_min}</td>
+                    <td className="py-1 pr-4">{seg.soak_min}</td>
+                    <td className="py-1">{seg.target_temp}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
       </div>
     </div>
   );

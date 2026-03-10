@@ -23,9 +23,27 @@ class RealController:
         self._instrument.serial.parity = minimalmodbus.serial.PARITY_NONE
         self._instrument.serial.stopbits = 1
         self._instrument.serial.timeout = 1.0
+        self._port = port
+        self._slave_address = slave_address
+        self._baud_rate = baud_rate
         self._min_interval = 0.3  # 300ms between requests
         self._last_request_time = 0.0
         self._lock = threading.Lock()
+
+    def reconnect(self) -> None:
+        """Close stale serial connection and recreate the Modbus instrument."""
+        with self._lock:
+            try:
+                self._instrument.serial.close()
+            except Exception:
+                pass
+            self._instrument = minimalmodbus.Instrument(self._port, self._slave_address)
+            self._instrument.serial.baudrate = self._baud_rate
+            self._instrument.serial.bytesize = 8
+            self._instrument.serial.parity = minimalmodbus.serial.PARITY_NONE
+            self._instrument.serial.stopbits = 1
+            self._instrument.serial.timeout = 1.0
+            logger.info("Reconnected Modbus instrument on %s", self._port)
 
     def _throttle(self) -> None:
         """Ensure minimum interval between Modbus requests."""
