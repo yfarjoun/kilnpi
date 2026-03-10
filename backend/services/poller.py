@@ -84,11 +84,11 @@ class ControllerState:
                     seg = self._active_segments[idx]
                     target = seg["target_temp"]
                     ramp_min = seg["ramp_min"]
-                    # Previous segment's target (or room temp for first)
+                    # Previous segment's target (or 0 for first segment)
                     if idx > 0:
                         prev_temp = self._active_segments[idx - 1]["target_temp"]
                     else:
-                        prev_temp = 25.0
+                        prev_temp = 0.0
                     elapsed = self.segment_elapsed_min
                     if ramp_min > 0 and elapsed < ramp_min:
                         # Linearly interpolate through the ramp
