@@ -179,12 +179,14 @@ async def fire_slot(slot: str) -> dict:
     # Ensure controller has the latest program (survives server restarts)
     await _upload_slots_to_controller()
 
-    # Set active program info on state for the recorder
+    # Set active program info on state for the recorder and status display
     _state.active_program_id = assignment.program_id
     _state.active_program_name = assignment.program.name
+    _state._active_segments = [dict(s) for s in assignment.program.segments]
 
     # Calculate starting segment and fire
     start_seg = _calculate_start_segment(assignments, slot)
+    _state._active_slot_offset = start_seg
     _controller.write_start_segment(start_seg)
     _controller.start_program()
 

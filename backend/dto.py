@@ -27,6 +27,8 @@ class StatusResponse(BaseModel):
     alarm1: bool
     alarm2: bool
     timestamp: str
+    active_program_name: str | None = None
+    program_target_temp: float | None = None
 
 
 class SetpointRequest(BaseModel):

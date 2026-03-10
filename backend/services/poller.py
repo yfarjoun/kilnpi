@@ -27,6 +27,8 @@ class ControllerState:
     last_poll_ok: bool = False
     active_program_id: int | None = None
     active_program_name: str | None = None
+    _active_segments: list[dict] | None = field(default=None, repr=False)
+    _active_slot_offset: int = field(default=0, repr=False)
     _run_started_at: datetime | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -51,6 +53,8 @@ class ControllerState:
                 self._run_started_at = None
                 self.active_program_id = None
                 self.active_program_name = None
+                self._active_segments = None
+                self._active_slot_offset = 0
 
             self.pv = pv
             self.sp = sp
@@ -68,6 +72,14 @@ class ControllerState:
             if self._run_started_at is not None:
                 delta = datetime.now(UTC) - self._run_started_at
                 total_elapsed = int(delta.total_seconds() / 60)
+
+            # Compute current segment's target temp from stored program
+            program_target_temp: float | None = None
+            if self._active_segments and self.segment > 0:
+                idx = self.segment - self._active_slot_offset - 1
+                if 0 <= idx < len(self._active_segments):
+                    program_target_temp = self._active_segments[idx]["target_temp"]
+
             return {
                 "pv": self.pv,
                 "sp": self.sp,
@@ -79,6 +91,8 @@ class ControllerState:
                 "alarm1": self.alarm1,
                 "alarm2": self.alarm2,
                 "timestamp": self.timestamp,
+                "active_program_name": self.active_program_name,
+                "program_target_temp": program_target_temp,
             }
 
 

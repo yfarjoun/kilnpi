@@ -22,6 +22,8 @@ export interface Status {
   alarm1: boolean;
   alarm2: boolean;
   timestamp: string;
+  active_program_name: string | null;
+  program_target_temp: number | null;
 }
 
 export interface Program {

@@ -13,7 +13,6 @@ export function Dashboard() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [picking, setPicking] = useState<string | null>(null); // slot being changed
   const [loading, setLoading] = useState(false);
-  const [firedSlot, setFiredSlot] = useState<string | null>(null);
   const [optimisticRunning, setOptimisticRunning] = useState<boolean | null>(null);
   const [stopping, setStopping] = useState(false);
 
@@ -43,12 +42,10 @@ export function Dashboard() {
   const handleFire = async (slot: string) => {
     setLoading(true);
     setOptimisticRunning(true);
-    setFiredSlot(slot);
     try {
       await api.fireSlot(slot);
     } catch (err) {
       setOptimisticRunning(null);
-      setFiredSlot(null);
       alert(`Failed to fire: ${err instanceof Error ? err.message : err}`);
     } finally {
       setLoading(false);
@@ -82,10 +79,6 @@ export function Dashboard() {
     }
   }, [realRunning, optimisticRunning]);
   const isRunning = optimisticRunning ?? realRunning;
-  // Clear firedSlot when program stops
-  useEffect(() => {
-    if (!isRunning) setFiredSlot(null);
-  }, [isRunning]);
 
   if (!status) {
     return (
@@ -109,7 +102,10 @@ export function Dashboard() {
 
         {/* SP Display + Edit */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
-          <TempGauge value={status.sp} label="Setpoint" />
+          <TempGauge
+            value={isRunning && status.program_target_temp != null ? status.program_target_temp : status.sp}
+            label={isRunning && status.program_target_temp != null ? "Target" : "Setpoint"}
+          />
           <div className="mt-4 flex justify-center">
             {editing ? (
               <div className="flex gap-2">
@@ -236,7 +232,7 @@ export function Dashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <h3 className="text-lg font-semibold mb-2">
             {!realRunning && optimisticRunning ? 'Starting' : 'Running'}:{' '}
-            {firedSlot && slots.find((s) => s.slot === firedSlot)?.program?.name || 'Program'}
+            {status.active_program_name || 'Program'}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
