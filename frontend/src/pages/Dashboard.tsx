@@ -17,13 +17,18 @@ export function Dashboard() {
   const [optimisticRunning, setOptimisticRunning] = useState<boolean | null>(null);
   const [stopping, setStopping] = useState(false);
 
-  const loadSlots = useCallback(() => {
-    api.getSlots().then(setSlots).catch(() => {});
+  const loadSlots = useCallback(async () => {
+    try {
+      const data = await api.getSlots();
+      setSlots(data);
+    } catch (err) {
+      console.error('Failed to load slots:', err);
+    }
   }, []);
 
   useEffect(() => {
     loadSlots();
-    api.listPrograms().then(setPrograms).catch(() => {});
+    api.listPrograms().then(setPrograms).catch((err) => console.error('Failed to load programs:', err));
   }, [loadSlots]);
 
   const handleSetSP = async () => {
@@ -50,10 +55,19 @@ export function Dashboard() {
     }
   };
 
+  const [assigningSlot, setAssigningSlot] = useState<string | null>(null);
+
   const handleAssign = async (slot: string, programId: number) => {
-    await api.assignSlot(slot, programId);
-    setPicking(null);
-    loadSlots();
+    setAssigningSlot(slot);
+    try {
+      await api.assignSlot(slot, programId);
+      setPicking(null);
+      await loadSlots();
+    } catch (err) {
+      alert(`Failed to assign slot ${slot}: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setAssigningSlot(null);
+    }
   };
 
   const realRunning = status?.run_mode === 'running';
@@ -198,9 +212,11 @@ export function Dashboard() {
                     <button
                       key={p.id}
                       onClick={() => handleAssign(slotName, p.id)}
-                      className="w-full text-left px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm"
+                      disabled={assigningSlot !== null}
+                      className="w-full text-left px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm disabled:opacity-50"
                     >
-                      {p.name} <span className="text-gray-500 dark:text-gray-400">({p.segments.length} seg)</span>
+                      {assigningSlot === slotName ? '...' : p.name}{' '}
+                      <span className="text-gray-500 dark:text-gray-400">({p.segments.length} seg)</span>
                     </button>
                   ))}
                   {programs.length === 0 && (

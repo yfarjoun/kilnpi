@@ -35,10 +35,15 @@ const MAX_TEMP_DISPLAY = 1350; // fixed Y scale ceiling for kiln temps
 export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
+  const [dragAxis, setDragAxis] = useState<'x' | 'y' | null>(null);
   const [svgWidth, setSvgWidth] = useState(600);
   const containerRef = useRef<HTMLDivElement>(null);
   // Store the drag start pixel offset to prevent jumps
-  const dragStartRef = useRef<{ offsetY: number; offsetX: number; startTemp: number; startTime: number } | null>(null);
+  const dragStartRef = useRef<{
+    offsetY: number; offsetX: number;
+    startTemp: number; startTime: number;
+    dragAxis: 'x' | 'y' | null;
+  } | null>(null);
 
   const measuredRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
@@ -84,6 +89,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
       offsetX: e.clientX,
       startTemp: point.temp,
       startTime: point.time,
+      dragAxis: null,
     };
     setDragging(pointIndex);
   };
@@ -100,9 +106,24 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
     const dy = offsetY - e.clientY; // up = positive = hotter
     const dx = e.clientX - offsetX; // right = positive = later
 
-    // Convert to value deltas using current scale
-    const deltaDeg = Math.round((dy / pxPerDeg) / 5) * 5;
-    const deltaMin = Math.round(dx / pxPerMin);
+    // Lock axis after 5px of movement
+    if (!dragStartRef.current.dragAxis) {
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      if (absDx > 5 || absDy > 5) {
+        const locked = absDx > absDy ? 'x' : 'y';
+        dragStartRef.current.dragAxis = locked;
+        setDragAxis(locked);
+      } else {
+        return; // Not enough movement yet
+      }
+    }
+
+    const axis = dragStartRef.current.dragAxis;
+
+    // Convert to value deltas using current scale, constrained to locked axis
+    const deltaDeg = axis === 'x' ? 0 : Math.round((dy / pxPerDeg) / 5) * 5;
+    const deltaMin = axis === 'y' ? 0 : Math.round(dx / pxPerMin);
 
     const newTemp = Math.max(0, Math.min(1300, startTemp + deltaDeg));
     const newTime = Math.max(0, startTime + deltaMin);
@@ -129,11 +150,25 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
 
   const handleMouseUp = () => {
     setDragging(null);
+    setDragAxis(null);
     dragStartRef.current = null;
   };
 
   const yTicks = 5;
-  const xTicks = 5;
+
+  // Generate time-based X ticks: major every 60min, minor every 30min
+  const timeTicks: { time: number; major: boolean; label: string }[] = [];
+  for (let t = 0; t <= displayMaxTime; t += 30) {
+    const hours = Math.floor(t / 60);
+    const mins = t % 60;
+    const major = t % 60 === 0;
+    let label: string;
+    if (t === 0) label = '0';
+    else if (hours === 0) label = `${mins}m`;
+    else if (mins === 0) label = `${hours}h`;
+    else label = `${hours}h${mins}m`;
+    timeTicks.push({ time: t, major, label });
+  }
 
   return (
     <div className="space-y-4">
@@ -143,6 +178,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
           width={svgWidth}
           height={CHART_HEIGHT}
           className="select-none"
+          style={{ cursor: dragAxis === 'x' ? 'ew-resize' : dragAxis === 'y' ? 'ns-resize' : undefined }}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
@@ -158,13 +194,17 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
               </g>
             );
           })}
-          {Array.from({ length: xTicks + 1 }, (_, i) => {
-            const x = MARGIN.left + (i / xTicks) * plotW;
-            const time = Math.round(activeMaxTime * (i / xTicks));
+          {timeTicks.map(({ time, major, label }) => {
+            const x = toX(time);
             return (
-              <g key={`xg-${i}`}>
-                <line x1={x} y1={MARGIN.top} x2={x} y2={MARGIN.top + plotH} stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                <text x={x} y={CHART_HEIGHT - 8} fill="var(--chart-text)" fontSize={10} textAnchor="middle">{time}m</text>
+              <g key={`xg-${time}`}>
+                <line
+                  x1={x} y1={MARGIN.top} x2={x} y2={MARGIN.top + plotH}
+                  stroke="var(--chart-grid)"
+                  strokeDasharray={major ? 'none' : '3 3'}
+                  opacity={major ? 0.6 : 0.3}
+                />
+                <text x={x} y={CHART_HEIGHT - 8} fill="var(--chart-text)" fontSize={10} textAnchor="middle">{label}</text>
               </g>
             );
           })}
@@ -247,7 +287,7 @@ export function ProfileEditor({ segments, onChange }: ProfileEditorProps) {
           ))}
         </svg>
         <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-          Drag points to adjust: up/down for temperature, left/right for timing
+          Drag points to adjust &mdash; movement locks to one axis: vertical for temperature, horizontal for timing
         </div>
       </div>
       <SegmentTable segments={segments} onChange={onChange} />

@@ -11,17 +11,30 @@ export function Programs() {
   const [description, setDescription] = useState('');
   const [segments, setSegments] = useState<Segment[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [assigning, setAssigning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadSlots = useCallback(() => {
-    api.getSlots().then(setSlots).catch(() => {});
+  const loadSlots = useCallback(async () => {
+    try {
+      const data = await api.getSlots();
+      setSlots(data);
+    } catch (err) {
+      console.error('Failed to load slots:', err);
+    }
   }, []);
 
   useEffect(() => { loadSlots(); }, [loadSlots]);
 
   const assignToSlot = async (slot: string, programId: number) => {
-    await api.assignSlot(slot, programId);
-    loadSlots();
+    setAssigning(slot);
+    try {
+      await api.assignSlot(slot, programId);
+      await loadSlots();
+    } catch (err) {
+      alert(`Failed to assign slot ${slot}: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setAssigning(null);
+    }
   };
 
   const startNew = () => {
@@ -175,21 +188,23 @@ export function Programs() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => assignToSlot('A', prog.id)}
-                    className={`px-3 py-1 rounded text-xs text-white ${
+                    disabled={assigning !== null}
+                    className={`px-3 py-1 rounded text-xs text-white disabled:opacity-50 ${
                       slots.find((s) => s.slot === 'A')?.program?.id === prog.id
                         ? 'bg-green-700' : 'bg-indigo-600 hover:bg-indigo-500'
                     }`}
                   >
-                    {slots.find((s) => s.slot === 'A')?.program?.id === prog.id ? 'Slot A \u2713' : '\u2192 Slot A'}
+                    {assigning === 'A' ? '...' : slots.find((s) => s.slot === 'A')?.program?.id === prog.id ? 'Slot A \u2713' : '\u2192 Slot A'}
                   </button>
                   <button
                     onClick={() => assignToSlot('B', prog.id)}
-                    className={`px-3 py-1 rounded text-xs text-white ${
+                    disabled={assigning !== null}
+                    className={`px-3 py-1 rounded text-xs text-white disabled:opacity-50 ${
                       slots.find((s) => s.slot === 'B')?.program?.id === prog.id
                         ? 'bg-green-700' : 'bg-indigo-600 hover:bg-indigo-500'
                     }`}
                   >
-                    {slots.find((s) => s.slot === 'B')?.program?.id === prog.id ? 'Slot B \u2713' : '\u2192 Slot B'}
+                    {assigning === 'B' ? '...' : slots.find((s) => s.slot === 'B')?.program?.id === prog.id ? 'Slot B \u2713' : '\u2192 Slot B'}
                   </button>
                   <button
                     onClick={() => window.open(`/api/programs/${prog.id}/csv`)}
