@@ -67,7 +67,7 @@ export function Dashboard() {
     }
   };
 
-  const realRunning = status?.run_mode === 'running';
+  const realRunning = status?.run_mode === 'running' || status?.run_mode === 'standby';
   // Clear optimistic override once real status catches up
   useEffect(() => {
     if (optimisticRunning === true && realRunning) {
@@ -251,24 +251,45 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Stop button */}
-      {isRunning && (
-        <button
-          onClick={async () => {
-            setStopping(true);
-            setOptimisticRunning(false);
-            try {
-              await api.stopProgram();
-            } catch {
-              setStopping(false);
-              setOptimisticRunning(null);
-            }
-          }}
-          disabled={stopping}
-          className="w-full px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-400 rounded-lg font-medium text-white"
-        >
-          {stopping ? 'Stopping...' : 'Stop Program'}
-        </button>
+      {/* Pause / Resume / Stop buttons */}
+      {(isRunning || status.run_mode === 'standby') && (
+        <div className="flex gap-4">
+          {status.run_mode === 'standby' ? (
+            <button
+              onClick={async () => {
+                try { await api.resumeProgram(); } catch { /* ignore */ }
+              }}
+              className="flex-1 px-6 py-4 bg-green-600 hover:bg-green-500 rounded-lg font-medium text-white text-lg"
+            >
+              Resume Kiln
+            </button>
+          ) : isRunning ? (
+            <button
+              onClick={async () => {
+                try { await api.pauseProgram(); } catch { /* ignore */ }
+              }}
+              className="flex-1 px-6 py-4 bg-amber-600 hover:bg-amber-500 rounded-lg font-medium text-white text-lg"
+            >
+              Pause Kiln
+            </button>
+          ) : null}
+          <button
+            onClick={async () => {
+              setStopping(true);
+              setOptimisticRunning(false);
+              try {
+                await api.stopProgram();
+              } catch {
+                setStopping(false);
+                setOptimisticRunning(null);
+              }
+            }}
+            disabled={stopping}
+            className="flex-1 px-6 py-4 bg-red-600 hover:bg-red-500 disabled:bg-gray-400 rounded-lg font-medium text-white text-lg"
+          >
+            {stopping ? 'Stopping...' : 'Stop Program'}
+          </button>
+        </div>
       )}
     </div>
   );

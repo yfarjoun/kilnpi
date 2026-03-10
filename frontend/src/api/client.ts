@@ -26,6 +26,12 @@ export const api = {
   stopProgram: () =>
     request<{ ok: boolean }>('/program/stop', { method: 'POST' }),
 
+  pauseProgram: () =>
+    request<{ ok: boolean }>('/program/pause', { method: 'POST' }),
+
+  resumeProgram: () =>
+    request<{ ok: boolean }>('/program/resume', { method: 'POST' }),
+
   getPID: () => request<import('../types').PIDParams>('/pid'),
 
   setPID: (params: import('../types').PIDParams) =>

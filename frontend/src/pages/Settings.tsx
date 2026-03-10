@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
+import { ProfileChart } from '../components/ProfileChart';
 import type { PIDParams, Segment } from '../types';
 
 export function Settings() {
@@ -145,29 +146,10 @@ export function Settings() {
           {loadingSegments ? 'Reading...' : 'Read from Controller'}
         </button>
         {controllerSegments !== null && (
-          controllerSegments.length === 0 ? (
+          controllerSegments.filter((s) => s.ramp_min > 0).length === 0 ? (
             <p className="text-sm text-gray-400">No segments on controller.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                  <th className="py-1 pr-4">#</th>
-                  <th className="py-1 pr-4">Ramp (min)</th>
-                  <th className="py-1 pr-4">Soak (min)</th>
-                  <th className="py-1">Target (°C)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {controllerSegments.filter((s) => s.ramp_min > 0).map((seg, i) => (
-                  <tr key={i} className="border-b border-gray-100 dark:border-gray-700">
-                    <td className="py-1 pr-4">{i + 1}</td>
-                    <td className="py-1 pr-4">{seg.ramp_min}</td>
-                    <td className="py-1 pr-4">{seg.soak_min}</td>
-                    <td className="py-1">{seg.target_temp}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ProfileChart segments={controllerSegments.filter((s) => s.ramp_min > 0)} />
           )
         )}
       </div>

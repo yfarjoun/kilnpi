@@ -98,9 +98,9 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     recorder = Recorder(state, interval=settings.poll_interval_sec)
 
-    # Recover from restart: resume or close stale firings, restore program state
-    await recorder.recover_from_restart()
+    # Restore program info from stale firing first (before recover potentially closes it)
     await _restore_program_state(state)
+    await recorder.recover_from_restart()
 
     recorder_task = asyncio.create_task(recorder.run())
 

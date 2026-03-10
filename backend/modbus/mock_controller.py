@@ -137,6 +137,14 @@ class MockController:
         self._segment_elapsed = 0
         self._start_segment = 0
 
+    def pause_program(self) -> None:
+        if self._run_mode == RunMode.RUNNING:
+            self._run_mode = RunMode.STANDBY
+
+    def resume_program(self) -> None:
+        if self._run_mode == RunMode.STANDBY:
+            self._run_mode = RunMode.RUNNING
+
     def read_run_status(self) -> RunMode:
         return self._run_mode
 

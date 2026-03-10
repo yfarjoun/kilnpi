@@ -45,11 +45,12 @@ class ControllerState:
     ) -> None:
         with self._lock:
             # Track when the program started running
-            was_running = self.run_mode == RunMode.RUNNING
-            now_running = run_mode == RunMode.RUNNING
-            if now_running and not was_running:
+            # STANDBY (paused) is still "program active" — don't clear state
+            was_active = self.run_mode in (RunMode.RUNNING, RunMode.STANDBY)
+            now_active = run_mode in (RunMode.RUNNING, RunMode.STANDBY)
+            if run_mode == RunMode.RUNNING and not was_active:
                 self._run_started_at = datetime.now(UTC)
-            elif not now_running and was_running:
+            elif not now_active and was_active:
                 self._run_started_at = None
                 self.active_program_id = None
                 self.active_program_name = None
@@ -73,12 +74,29 @@ class ControllerState:
                 delta = datetime.now(UTC) - self._run_started_at
                 total_elapsed = int(delta.total_seconds() / 60)
 
-            # Compute current segment's target temp from stored program
+            # Interpolate the current ramp/soak target from stored program.
+            # During ramp: linearly interpolate between prev and target temp.
+            # During soak: hold at target temp.
             program_target_temp: float | None = None
             if self._active_segments and self.segment > 0:
                 idx = self.segment - self._active_slot_offset - 1
                 if 0 <= idx < len(self._active_segments):
-                    program_target_temp = self._active_segments[idx]["target_temp"]
+                    seg = self._active_segments[idx]
+                    target = seg["target_temp"]
+                    ramp_min = seg["ramp_min"]
+                    # Previous segment's target (or room temp for first)
+                    if idx > 0:
+                        prev_temp = self._active_segments[idx - 1]["target_temp"]
+                    else:
+                        prev_temp = 25.0
+                    elapsed = self.segment_elapsed_min
+                    if ramp_min > 0 and elapsed < ramp_min:
+                        # Linearly interpolate through the ramp
+                        frac = elapsed / ramp_min
+                        program_target_temp = prev_temp + (target - prev_temp) * frac
+                    else:
+                        # In soak phase (or ramp=0) — hold at target
+                        program_target_temp = target
 
             return {
                 "pv": self.pv,

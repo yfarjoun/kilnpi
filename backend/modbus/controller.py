@@ -50,6 +50,14 @@ class ControllerInterface(Protocol):
         """Stop the running program."""
         ...
 
+    def pause_program(self) -> None:
+        """Pause the running program (standby mode)."""
+        ...
+
+    def resume_program(self) -> None:
+        """Resume a paused program."""
+        ...
+
     def read_run_status(self) -> RunMode:
         """Read the current run mode."""
         ...

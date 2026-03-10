@@ -33,9 +33,9 @@ class Recorder:
                 return
 
             snapshot = self._state.snapshot()
-            is_running = snapshot["run_mode"] == "running"
+            is_active = snapshot["run_mode"] in ("running", "standby")
 
-            if is_running and self._state.last_poll_ok:
+            if is_active and self._state.last_poll_ok:
                 # Controller is still running — resume recording into existing firing
                 self._current_firing_id = stale.id
                 self._was_running = True
@@ -52,16 +52,17 @@ class Recorder:
         while True:
             try:
                 snapshot = self._state.snapshot()
-                is_running = snapshot["run_mode"] == "running"
+                # Treat standby (paused) as still active — keep recording
+                is_active = snapshot["run_mode"] in ("running", "standby")
 
-                if is_running and not self._was_running:
+                if is_active and not self._was_running:
                     await self._start_firing(snapshot)
-                elif not is_running and self._was_running:
+                elif not is_active and self._was_running:
                     await self._end_firing()
-                elif is_running and self._current_firing_id is not None:
+                elif is_active and self._current_firing_id is not None:
                     await self._record_reading(snapshot)
 
-                self._was_running = is_running
+                self._was_running = is_active
             except Exception:
                 logger.exception("Recorder error")
 

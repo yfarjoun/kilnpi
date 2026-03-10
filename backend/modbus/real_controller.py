@@ -160,6 +160,14 @@ class RealController:
         with self._lock:
             self._write_reg(registers.RUN, RunMode.OFF)
 
+    def pause_program(self) -> None:
+        with self._lock:
+            self._write_reg(registers.RUN, RunMode.STANDBY)
+
+    def resume_program(self) -> None:
+        with self._lock:
+            self._write_reg(registers.RUN, RunMode.RUNNING)
+
     def read_run_status(self) -> RunMode:
         with self._lock:
             val = int(self._read_reg(registers.RUN))

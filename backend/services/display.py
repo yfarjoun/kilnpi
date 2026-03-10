@@ -299,22 +299,28 @@ class DisplayService:
         while not self._stop_event.is_set():
             try:
                 mode = self._button_state.active_mode() if self._button_state else None
-                reversed_lines: set[int] | None = None
+                reversed_lines: set[int] = set()
                 if mode == "system":
                     lines = self._system_detail()
-                    reversed_lines = {0}
                 elif mode == "network":
                     lines = self._network_detail()
-                    reversed_lines = {0}
+                    # Highlight Modbus line when there's an error
+                    if not self._state.last_poll_ok:
+                        reversed_lines.add(3)
                 elif mode == "program":
                     lines = self._program_detail()
-                    reversed_lines = {0}
+                    # Highlight the live PV/SP line when program is active
+                    if self._state.run_mode in (RunMode.RUNNING, RunMode.STANDBY):
+                        reversed_lines.add(2)
                 else:
                     lines = self._compact_lines()
-                    # Reverse the status line when a program is running
-                    if self._state.run_mode == RunMode.RUNNING:
-                        reversed_lines = {3}
-                self._display.show(lines, reversed_lines=reversed_lines)
+                    # Highlight running program info (variable data)
+                    if self._state.run_mode in (RunMode.RUNNING, RunMode.STANDBY):
+                        reversed_lines.add(3)
+                    # Highlight connectivity line on Modbus error
+                    if not self._state.last_poll_ok:
+                        reversed_lines.add(1)
+                self._display.show(lines, reversed_lines=reversed_lines or None)
             except Exception:
                 logger.exception("Display update error")
             # Poll every 0.5s so button presses feel responsive,
@@ -344,13 +350,14 @@ class DisplayService:
         else:
             poll_str = f"Poll: {poll_age}s ago"
 
-        # Line 4: running program info or "Idle"
-        if self._state.run_mode == RunMode.RUNNING:
+        # Line 4: running/paused program info or "Idle"
+        if self._state.run_mode in (RunMode.RUNNING, RunMode.STANDBY):
             name = self._state.active_program_name or "Program"
             seg = self._state.segment
             pv = self._state.pv
             sp = self._state.sp
-            suffix = f"S{seg} {pv:.0f}/{sp:.0f}"
+            paused = "||" if self._state.run_mode == RunMode.STANDBY else ""
+            suffix = f"S{seg} {pv:.0f}/{sp:.0f}{paused}"
             max_name = 21 - len(suffix) - 1
             if len(name) > max_name:
                 name = name[:max_name]
@@ -394,15 +401,16 @@ class DisplayService:
 
     def _program_detail(self) -> list[str]:
         """Expanded program info: name, segment, PV/SP, elapsed."""
-        if self._state.run_mode != RunMode.RUNNING:
+        if self._state.run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
             return ["Prog: --", "No program", "running", ""]
         name = self._state.active_program_name or "Unknown"
         seg = self._state.segment
         pv = self._state.pv
         sp = self._state.sp
         elapsed = self._state.segment_elapsed_min
+        status = "PAUSED" if self._state.run_mode == RunMode.STANDBY else ""
         return [
-            f"Prog: {name}",
+            f"Prog: {name} {status}".strip(),
             f"Segment {seg}",
             f"PV: {pv:.0f} SP: {sp:.0f}",
             f"Elapsed: {elapsed} min",

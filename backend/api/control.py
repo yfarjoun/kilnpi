@@ -37,6 +37,20 @@ async def stop_program() -> dict:
     return {"ok": True}
 
 
+@router.post("/program/pause")
+async def pause_program() -> dict:
+    assert _controller is not None
+    _controller.pause_program()
+    return {"ok": True}
+
+
+@router.post("/program/resume")
+async def resume_program() -> dict:
+    assert _controller is not None
+    _controller.resume_program()
+    return {"ok": True}
+
+
 @router.get("/pid", response_model=PIDParams)
 async def get_pid() -> PIDParams:
     assert _controller is not None
