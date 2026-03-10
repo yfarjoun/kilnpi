@@ -137,12 +137,18 @@ class Poller:
         self._interval = interval
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._first_poll_done = threading.Event()
 
     def start(self) -> None:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run, daemon=True, name="poller")
         self._thread.start()
         logger.info("Poller started (interval=%.1fs)", self._interval)
+
+    def wait_for_first_poll(self, timeout: float = 10.0) -> bool:
+        """Block until the first poll completes. Returns True if poll succeeded."""
+        self._first_poll_done.wait(timeout)
+        return self._state.last_poll_ok
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -172,5 +178,7 @@ class Poller:
                         self._controller.reconnect()  # type: ignore[attr-defined]
                     except Exception:
                         logger.exception("Reconnect failed")
+            finally:
+                self._first_poll_done.set()
 
             self._stop_event.wait(self._interval)

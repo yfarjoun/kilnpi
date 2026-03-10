@@ -95,6 +95,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     # Start background services
     poller = Poller(controller, state, interval=settings.poll_interval_sec)
     poller.start()
+    # Wait for first poll so recover_from_restart sees actual controller state
+    poller.wait_for_first_poll()
 
     recorder = Recorder(state, interval=settings.poll_interval_sec)
 
