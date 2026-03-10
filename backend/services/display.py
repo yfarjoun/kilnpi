@@ -376,7 +376,8 @@ class DisplayService:
             seg = self._state.segment
             pv = self._state.pv
             snap = self._state.snapshot()
-            sp = snap.get("program_target_temp") or self._state.sp
+            target = snap.get("program_target_temp")
+            sp = target if target is not None else self._state.sp
             paused = "||" if self._state.run_mode == RunMode.STANDBY else ""
             suffix = f"S{seg} {pv:.0f}/{sp:.0f}{paused}"
             max_name = 21 - len(suffix) - 1
@@ -428,7 +429,8 @@ class DisplayService:
         seg = self._state.segment
         pv = self._state.pv
         snap = self._state.snapshot()
-        sp = snap.get("program_target_temp") or self._state.sp
+        target = snap.get("program_target_temp")
+        sp = target if target is not None else self._state.sp
         elapsed = self._state.segment_elapsed_min
         status = "PAUSED" if self._state.run_mode == RunMode.STANDBY else ""
         return [
