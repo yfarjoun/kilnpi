@@ -15,7 +15,7 @@ from backend.modbus.controller import ControllerInterface
 from backend.modbus.mock_controller import MockController
 from backend.models.database import init_db
 from backend.services.buttons import ButtonState, create_button_service
-from backend.services.display import DisplayService
+from backend.services.display import DisplayService, create_display_and_splash
 from backend.services.poller import ControllerState, Poller
 from backend.services.recorder import Recorder
 
@@ -41,7 +41,9 @@ def _create_controller() -> ControllerInterface:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-    # Startup
+    # Startup — show splash ASAP so user sees feedback on boot
+    oled = create_display_and_splash()
+
     await init_db()
 
     controller = _create_controller()
@@ -64,7 +66,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     buttons = create_button_service(button_state)
     buttons.start()
 
-    display = DisplayService(state, ws.client_count, interval=5.0, button_state=button_state)
+    display = DisplayService(state, ws.client_count, interval=5.0, button_state=button_state, display=oled)
     display.start()
 
     broadcast_task = asyncio.create_task(

@@ -62,6 +62,18 @@ def _create_display() -> MockDisplay | OledDisplay:
         return MockDisplay()
 
 
+def create_display_and_splash() -> MockDisplay | OledDisplay:
+    """Create display hardware and immediately show a splash screen.
+
+    Call this early in app startup so the user sees feedback quickly.
+    Pass the returned display to DisplayService via its `display` parameter.
+    """
+    display = _create_display()
+    display.show(["", "    KilnPi", "", "    Starting..."])
+    logger.info("Splash screen shown")
+    return display
+
+
 def get_disk_usage_pct() -> int:
     """Return disk usage percentage for the root filesystem."""
     try:
@@ -231,12 +243,13 @@ class DisplayService:
         ws_client_count: Callable[[], int],
         interval: float = 5.0,
         button_state: ButtonState | None = None,
+        display: MockDisplay | OledDisplay | None = None,
     ) -> None:
         self._state = state
         self._ws_client_count = ws_client_count
         self._interval = interval
         self._button_state = button_state
-        self._display = _create_display()
+        self._display = display or _create_display()
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
@@ -257,6 +270,7 @@ class DisplayService:
         logger.info("Display service stopped")
 
     def _run(self) -> None:
+        mode: str | None = None
         while not self._stop_event.is_set():
             try:
                 mode = self._button_state.active_mode() if self._button_state else None
