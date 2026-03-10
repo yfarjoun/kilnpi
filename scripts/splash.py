@@ -19,13 +19,14 @@ from PIL import ImageFont  # type: ignore[import-untyped]
 SENTINEL = Path("/tmp/kilnpi-ready")
 SENTINEL.unlink(missing_ok=True)
 
-# System milestones to track, in rough boot order
+# System milestones to track, in rough boot order.
+# The splash runs as a system service (after local-fs.target), so we can
+# watch later targets come up.  The sentinel file signals the app is ready.
 MILESTONES = [
-    ("local-fs.target", "Filesystems"),
     ("sysinit.target", "System init"),
     ("network.target", "Network"),
     ("network-online.target", "Online"),
-    ("kilnpi.service", "App loading"),
+    ("multi-user.target", "Services"),
 ]
 
 serial = spi(device=0, port=0, gpio_DC=24, gpio_RST=25)
