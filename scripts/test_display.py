@@ -1,4 +1,5 @@
 """Quick test: show pattern on the Waveshare 1.3" OLED HAT."""
+
 import time
 
 from luma.core.interface.serial import spi

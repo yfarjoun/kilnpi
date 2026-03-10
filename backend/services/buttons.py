@@ -87,6 +87,7 @@ class ButtonService:
         def _cb() -> None:
             logger.debug("Button press: %s", mode)
             self._button_state.press(mode)
+
         return _cb
 
 
@@ -109,6 +110,7 @@ def create_button_service(button_state: ButtonState) -> ButtonService | MockButt
         return MockButtonService(button_state)
     try:
         import gpiozero  # type: ignore[import-untyped]  # noqa: F401
+
         return ButtonService(button_state)
     except ImportError:
         logger.warning("gpiozero not available, using mock button service")

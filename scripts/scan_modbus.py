@@ -2,6 +2,7 @@
 
 import sys
 import time
+
 import minimalmodbus
 
 port = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyUSB0"
@@ -30,6 +31,6 @@ for baud in bauds:
                     pass
             if addr % 10 == 0:
                 print(f"  scanned {addr}/63...", flush=True)
-        print(f"  No response", flush=True)
+        print("  No response", flush=True)
 
 print("\nNo device found.")

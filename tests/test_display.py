@@ -278,9 +278,7 @@ def _make_capturing_service(
         def show(self, lines: list[str]) -> None:
             shown.append(lines)
 
-    service = DisplayService(
-        state, lambda: ws_count, interval=0.05, button_state=button_state
-    )
+    service = DisplayService(state, lambda: ws_count, interval=0.05, button_state=button_state)
     service._display = CapturingDisplay()  # type: ignore[assignment]
     return service, shown
 
@@ -310,8 +308,16 @@ def test_network_detail_mode() -> None:
     from backend.modbus.registers import RunMode
 
     state = ControllerState()
-    state.update(pv=100, sp=200, mv=50, run_mode=RunMode.OFF,
-                 segment=0, segment_elapsed_min=0, alarm1=False, alarm2=False)
+    state.update(
+        pv=100,
+        sp=200,
+        mv=50,
+        run_mode=RunMode.OFF,
+        segment=0,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
+    )
     state.last_poll_ok = True
 
     bs = ButtonState()
@@ -336,8 +342,16 @@ def test_program_detail_mode_running() -> None:
     from backend.modbus.registers import RunMode
 
     state = ControllerState()
-    state.update(pv=850, sp=900, mv=70, run_mode=RunMode.RUNNING,
-                 segment=1, segment_elapsed_min=45, alarm1=False, alarm2=False)
+    state.update(
+        pv=850,
+        sp=900,
+        mv=70,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=45,
+        alarm1=False,
+        alarm2=False,
+    )
     state.active_program_name = "Bisque"
 
     bs = ButtonState()
