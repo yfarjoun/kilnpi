@@ -133,35 +133,24 @@ The app is available at **http://\<pi-ip\>:8000**.
 
 ### 9. Auto-start with systemd
 
-Create `/etc/systemd/system/kilnpi.service`:
-
-```ini
-[Unit]
-Description=KilnPi Controller
-After=network.target
-
-[Service]
-Type=simple
-User=farjoun
-WorkingDirectory=/home/farjoun/kilnpi
-ExecStart=/home/farjoun/.local/bin/uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then enable and start:
+The repo includes `kilnpi.service` (a systemd **user** service). Install it:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable kilnpi
-sudo systemctl start kilnpi
+mkdir -p ~/.config/systemd/user
+ln -sf ~/kilnpi/kilnpi.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now kilnpi.service
 
 # Check status / logs
-sudo systemctl status kilnpi
-journalctl -u kilnpi -f
+systemctl --user status kilnpi
+journalctl --user -u kilnpi -f
+```
+
+Optional: install the OLED boot splash screen (system service, shows
+progress bar during boot):
+
+```bash
+sudo ~/kilnpi/scripts/install-splash.sh
 ```
 
 ## Development (Mac)
@@ -173,25 +162,21 @@ No Pi needed — mock mode runs automatically on macOS.
 - Python 3.11+
 - Node.js 20+ and npm
 - [uv](https://docs.astral.sh/uv/)
+- [just](https://github.com/casey/just) (task runner)
 
 ### Setup
 
 ```bash
 git clone https://github.com/yfarjoun/kilnpi.git
 cd kilnpi
-uv sync --extra dev
-cd frontend && npm install && cd ..
+just install        # installs backend (uv) + frontend (npm) deps
 ```
 
 ### Running
 
 ```bash
-# Terminal 1 — backend (auto-detects mock mode on Mac)
-uv run uvicorn backend.main:app --reload --port 8000
-
-# Terminal 2 — frontend dev server
-cd frontend
-npm run dev
+just dev-backend    # backend with auto-reload (mock mode on Mac)
+just dev-frontend   # frontend dev server (in a second terminal)
 ```
 
 Open **http://localhost:5173** in your browser.
@@ -203,15 +188,33 @@ Open **http://localhost:5173** in your browser.
 | `MOCK_CONTROLLER`  | auto-detected      | Set to `1` to force mock mode     |
 | `DB_PATH`          | `data/kiln.db`     | SQLite database file path         |
 
-### Testing
+### Common tasks
 
 ```bash
-uv run ruff check .           # Lint
-uv run ruff format --check .  # Format check
-uv run mypy backend/          # Type check
-uv run pytest                 # Tests
-cd frontend && npm run lint   # Frontend lint
-cd frontend && npm run build  # Frontend type check + build
+just                # list all available recipes
+just check          # lint + test (everything)
+just lint           # ruff + eslint
+just lint-fix       # auto-fix ruff issues
+just typecheck      # mypy
+just test           # pytest (pass args: just test -x -q)
+just build          # build frontend for production
+just ci             # run the full CI pipeline locally
+```
+
+### Deploying to the Pi
+
+```bash
+just deploy                     # build frontend + rsync + git pull + restart
+just deploy-frontend            # build + rsync frontend only + restart
+just deploy kilnpi.local        # override host (default: kilnpi)
+```
+
+### Pi management
+
+```bash
+just status         # show service status
+just logs           # tail service logs
+just restart        # restart kilnpi service
 ```
 
 ## Project Structure
@@ -251,8 +254,14 @@ frontend/src/
   pages/                   Dashboard, Monitor, Programs, History, Statistics, Settings
   components/              TempGauge, FiringChart, ProfileEditor, SegmentTable, StatusBar
 
+justfile                         Task runner recipes (just)
+
 scripts/
+  deploy-frontend.sh       Build + rsync frontend to Pi
+  splash.py                OLED boot splash screen
+  install-splash.sh        Install splash as system service
   test_display.py          Quick OLED display test
+  test_write.py            Quick Modbus read/write test
 
 docs/research/
   thermomart_pid_rs485_protocol.md   Full Modbus register reference
