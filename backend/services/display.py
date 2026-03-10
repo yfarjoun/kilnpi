@@ -357,6 +357,8 @@ class DisplayService:
         cpu = get_cpu_temp()
 
         ip = get_ip_address()
+        # Show only last octet to save space (e.g. ".105")
+        ip_short = "." + ip.rsplit(".", 1)[-1] if "." in ip else ip
         wifi = "W+" if is_wifi_connected() else "W-"
         browsers = self._ws_client_count()
         browser = "B+" if browsers > 0 else "B-"
@@ -373,7 +375,8 @@ class DisplayService:
             name = self._state.active_program_name or "Program"
             seg = self._state.segment
             pv = self._state.pv
-            sp = self._state.sp
+            snap = self._state.snapshot()
+            sp = snap.get("program_target_temp") or self._state.sp
             paused = "||" if self._state.run_mode == RunMode.STANDBY else ""
             suffix = f"S{seg} {pv:.0f}/{sp:.0f}{paused}"
             max_name = 21 - len(suffix) - 1
@@ -385,7 +388,7 @@ class DisplayService:
 
         return [
             f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
-            f"{ip} {wifi} {browser} {modbus}",
+            f"{ip_short} {wifi} {browser} {modbus}",
             poll_str,
             line4,
         ]
@@ -424,7 +427,8 @@ class DisplayService:
         name = self._state.active_program_name or "Unknown"
         seg = self._state.segment
         pv = self._state.pv
-        sp = self._state.sp
+        snap = self._state.snapshot()
+        sp = snap.get("program_target_temp") or self._state.sp
         elapsed = self._state.segment_elapsed_min
         status = "PAUSED" if self._state.run_mode == RunMode.STANDBY else ""
         return [
