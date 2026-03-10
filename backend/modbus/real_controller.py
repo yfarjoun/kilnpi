@@ -46,7 +46,7 @@ class RealController:
         self._throttle()
         decimals = 1 if reg.has_decimal else 0
         self._instrument.write_register(
-            reg.address, value, number_of_decimals=decimals, signed=True
+            reg.address, value, number_of_decimals=decimals, functioncode=6, signed=True
         )
 
     def read_pv(self) -> float:
@@ -99,24 +99,23 @@ class RealController:
                 segments.append(Segment(ramp_min=ramp, soak_min=soak, target_temp=temp))
             return segments
 
+    def _raw_write(self, address: int, value: int | float, decimals: int = 0, signed: bool = False) -> None:
+        """Write a single register using function code 6."""
+        self._throttle()
+        self._instrument.write_register(address, value, decimals, functioncode=6, signed=signed)
+
     def write_program(self, segments: list[Segment]) -> None:
         with self._lock:
             for i, seg in enumerate(segments, 1):
                 if i > registers.MAX_SEGMENTS:
                     break
-                self._throttle()
-                self._instrument.write_register(registers.segment_ramp_addr(i), seg.ramp_min, 0)
-                self._throttle()
-                self._instrument.write_register(registers.segment_soak_addr(i), seg.soak_min, 0)
-                self._throttle()
-                self._instrument.write_register(
-                    registers.segment_temp_addr(i), seg.target_temp, 1, signed=True
-                )
+                self._raw_write(registers.segment_ramp_addr(i), seg.ramp_min)
+                self._raw_write(registers.segment_soak_addr(i), seg.soak_min)
+                self._raw_write(registers.segment_temp_addr(i), seg.target_temp, decimals=1, signed=True)
             # Terminate with ramp=0 in the next segment
             next_seg = len(segments) + 1
             if next_seg <= registers.MAX_SEGMENTS:
-                self._throttle()
-                self._instrument.write_register(registers.segment_ramp_addr(next_seg), 0, 0)
+                self._raw_write(registers.segment_ramp_addr(next_seg), 0)
 
     def start_program(self) -> None:
         with self._lock:

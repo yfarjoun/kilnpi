@@ -23,8 +23,8 @@ def test_pid_params_bounds() -> None:
     params = PIDParams(p=100, i=500, d=100, cycle_time=20)
     assert params.p == 100
 
-    with pytest.raises(ValidationError):
-        PIDParams(p=0, i=500, d=100, cycle_time=20)
+    # p=0 is valid (controller can return it)
+    assert PIDParams(p=0, i=500, d=100, cycle_time=20).p == 0
     with pytest.raises(ValidationError):
         PIDParams(p=100, i=500, d=100, cycle_time=1)
 
