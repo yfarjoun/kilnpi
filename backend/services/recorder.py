@@ -106,7 +106,7 @@ class Recorder:
                 firing_id=self._current_firing_id,
                 timestamp=now,
                 pv=snapshot["pv"],
-                sp=snapshot["sp"],
+                sp=snapshot.get("program_target_temp") or snapshot["sp"],
                 mv=snapshot["mv"],
                 segment=snapshot["segment"],
             )
