@@ -49,32 +49,29 @@ install:
 
 # --- Deploy ---
 
-# Deploy frontend to Pi (build + rsync + restart)
-deploy-frontend host='kilnpi':
+# Build frontend for production (output lands in frontend/dist/, served live)
+deploy-frontend:
     cd frontend && npm run build
-    @echo "Deploying to {{ host }}:~/kilnpi/frontend/dist ..."
-    rsync -avz --delete frontend/dist/ {{ host }}:~/kilnpi/frontend/dist/
-    ssh {{ host }} "systemctl --user restart kilnpi.service"
+    @echo "Done. Refresh the browser to pick up changes."
+
+# Pull latest code, rebuild frontend, restart service
+deploy:
+    git pull
+    cd frontend && npm run build
+    systemctl --user restart kilnpi.service
     @echo "Done."
 
-# Deploy everything: git pull on Pi + rebuild frontend + restart
-deploy host='kilnpi':
-    cd frontend && npm run build
-    rsync -avz --delete frontend/dist/ {{ host }}:~/kilnpi/frontend/dist/
-    ssh {{ host }} "cd ~/kilnpi && git pull && systemctl --user restart kilnpi.service"
-    @echo "Done."
+# Restart the service
+restart:
+    systemctl --user restart kilnpi.service
 
-# Restart the service on the Pi
-restart host='kilnpi':
-    ssh {{ host }} "systemctl --user restart kilnpi.service"
+# Show service status
+status:
+    systemctl --user status kilnpi.service
 
-# Show service status on the Pi
-status host='kilnpi':
-    ssh {{ host }} "systemctl --user status kilnpi.service"
-
-# Tail service logs on the Pi
-logs host='kilnpi':
-    ssh {{ host }} "journalctl --user -u kilnpi.service -f"
+# Tail service logs
+logs:
+    journalctl --user -u kilnpi.service -f
 
 # --- CI (mirrors GitHub Actions) ---
 

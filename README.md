@@ -201,12 +201,11 @@ just build          # build frontend for production
 just ci             # run the full CI pipeline locally
 ```
 
-### Deploying to the Pi
+### Deploying (run on the Pi)
 
 ```bash
-just deploy                     # build frontend + rsync + git pull + restart
-just deploy-frontend            # build + rsync frontend only + restart
-just deploy kilnpi.local        # override host (default: kilnpi)
+just deploy                     # git pull + build frontend + restart service
+just deploy-frontend            # build frontend only (no restart needed)
 ```
 
 ### Pi management
@@ -257,7 +256,6 @@ frontend/src/
 justfile                         Task runner recipes (just)
 
 scripts/
-  deploy-frontend.sh       Build + rsync frontend to Pi
   splash.py                OLED boot splash screen
   install-splash.sh        Install splash as system service
   test_display.py          Quick OLED display test
