@@ -10,7 +10,7 @@ class Segment(BaseModel):
 
 
 class PIDParams(BaseModel):
-    p: int = Field(ge=1, le=9999, description="Proportional band")
+    p: int = Field(ge=0, le=9999, description="Proportional band")
     i: int = Field(ge=0, le=3000, description="Integral time")
     d: int = Field(ge=0, le=2000, description="Derivative time (seconds)")
     cycle_time: int = Field(ge=2, le=120, description="Control cycle time (seconds)")

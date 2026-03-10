@@ -6,9 +6,15 @@ export function Settings() {
   const [pid, setPid] = useState<PIDParams | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getPID().then(setPid);
+    api.getPID()
+      .then(setPid)
+      .catch((err) => {
+        console.error('Failed to load PID:', err);
+        setError('Failed to load PID parameters from controller');
+      });
   }, []);
 
   const savePID = async () => {
@@ -30,6 +36,10 @@ export function Settings() {
     await api.startAutotune();
     setMessage('Auto-tuning started');
   };
+
+  if (error) {
+    return <div className="text-red-500">{error}</div>;
+  }
 
   if (!pid) {
     return <div className="text-gray-500 dark:text-gray-400">Loading settings...</div>;

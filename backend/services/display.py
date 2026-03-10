@@ -59,13 +59,13 @@ def _create_display() -> MockDisplay | OledDisplay:
     for attempt in range(3):
         try:
             return OledDisplay()
-        except Exception:
+        except Exception as exc:
             if attempt < 2:
                 import time
-                logger.info("OLED init attempt %d failed, retrying...", attempt + 1)
+                logger.info("OLED init attempt %d failed (%s), retrying...", attempt + 1, exc)
                 time.sleep(1)
             else:
-                logger.warning("Failed to init OLED after 3 attempts, using mock display")
+                logger.warning("Failed to init OLED after 3 attempts (%s), using mock display", exc)
                 return MockDisplay()
     return MockDisplay()  # unreachable, keeps type checker happy
 
