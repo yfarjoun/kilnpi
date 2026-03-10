@@ -55,11 +55,19 @@ class OledDisplay:
 def _create_display() -> MockDisplay | OledDisplay:
     if platform.system() == "Darwin":
         return MockDisplay()
-    try:
-        return OledDisplay()
-    except Exception:
-        logger.warning("Failed to init OLED, using mock display")
-        return MockDisplay()
+    # Retry a few times — the splash service may still be releasing SPI/GPIO
+    for attempt in range(3):
+        try:
+            return OledDisplay()
+        except Exception:
+            if attempt < 2:
+                import time
+                logger.info("OLED init attempt %d failed, retrying...", attempt + 1)
+                time.sleep(1)
+            else:
+                logger.warning("Failed to init OLED after 3 attempts, using mock display")
+                return MockDisplay()
+    return MockDisplay()  # unreachable, keeps type checker happy
 
 
 def create_display_and_splash() -> MockDisplay | OledDisplay:
