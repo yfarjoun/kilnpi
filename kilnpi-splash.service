@@ -1,0 +1,10 @@
+[Unit]
+Description=KilnPi OLED Splash Screen
+
+[Service]
+Type=simple
+ExecStart=%h/kilnpi/.venv/bin/python scripts/splash.py
+WorkingDirectory=%h/kilnpi
+
+[Install]
+WantedBy=default.target

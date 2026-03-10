@@ -41,9 +41,10 @@ def _create_controller() -> ControllerInterface:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-    # Startup — show splash ASAP so user sees feedback on boot
-    oled = create_display_and_splash()
+    # Signal the splash service to stop — we're taking over the display
+    Path("/tmp/kilnpi-ready").touch()
 
+    oled = create_display_and_splash()
     await init_db()
 
     controller = _create_controller()

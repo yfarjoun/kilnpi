@@ -74,6 +74,7 @@ def create_display_and_splash() -> MockDisplay | OledDisplay:
     return display
 
 
+
 def get_disk_usage_pct() -> int:
     """Return disk usage percentage for the root filesystem."""
     try:
