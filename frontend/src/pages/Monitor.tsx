@@ -17,7 +17,7 @@ export function Monitor() {
         const newReading: Reading = {
           timestamp: status.timestamp,
           pv: status.pv,
-          sp: status.sp,
+          sp: status.program_target_temp ?? status.sp,
           mv: status.mv,
           segment: status.segment,
         };
@@ -70,7 +70,7 @@ export function Monitor() {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
             <div className="text-sm text-gray-500 dark:text-gray-400">SP</div>
-            <div className="text-2xl font-bold text-blue-500 dark:text-blue-400">{status.sp.toFixed(1)}&deg;C</div>
+            <div className="text-2xl font-bold text-blue-500 dark:text-blue-400">{(status.program_target_temp ?? status.sp).toFixed(1)}&deg;C</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
             <div className="text-sm text-gray-500 dark:text-gray-400">Output</div>
