@@ -21,9 +21,9 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
   const data = readings.map((r, i) => ({
     index: i,
     time: new Date(r.timestamp).toLocaleTimeString(),
-    PV: r.pv,
-    SP: r.sp,
-    MV: r.mv,
+    PV: Math.round(r.pv),
+    SP: Math.round(r.sp),
+    MV: Math.round(r.mv),
   }));
 
   // Find the chart index corresponding to the cutoff timestamp
