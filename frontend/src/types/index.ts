@@ -24,6 +24,15 @@ export interface Status {
   timestamp: string;
   active_program_name: string | null;
   program_target_temp: number | null;
+  // Power monitoring (from PZEM-016)
+  l1_voltage: number | null;
+  l1_current: number | null;
+  l1_power: number | null;
+  l2_voltage: number | null;
+  l2_current: number | null;
+  l2_power: number | null;
+  total_current: number | null;
+  total_power: number | null;
 }
 
 export interface Program {
@@ -59,9 +68,20 @@ export interface Reading {
   segment: number | null;
 }
 
+export interface PowerReading {
+  timestamp: string;
+  l1_voltage: number;
+  l1_current: number;
+  l1_power: number;
+  l2_voltage: number;
+  l2_current: number;
+  l2_power: number;
+}
+
 export interface FiringDetail {
   firing: Firing;
   readings: Reading[];
+  power_readings: PowerReading[];
 }
 
 export interface Slot {
@@ -102,4 +122,16 @@ export interface HealthDatapoint {
 export interface HealthTrend {
   band: string;
   datapoints: HealthDatapoint[];
+}
+
+export interface SystemInfo {
+  disk_usage_pct: number;
+  memory_usage_pct: number;
+  cpu_temp: number;
+  ip_address: string;
+  wifi_connected: boolean;
+  uptime: string;
+  ws_client_count: number;
+  last_poll_ok: boolean;
+  poll_age_sec: number;
 }
