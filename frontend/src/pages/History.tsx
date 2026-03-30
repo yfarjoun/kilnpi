@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { FiringChart } from '../components/FiringChart';
+import { PowerChart } from '../components/PowerChart';
+import type { PowerDataPoint } from '../components/PowerChart';
 import type { Firing, FiringDetail, FiringStats } from '../types';
 
 export function History() {
@@ -142,6 +144,21 @@ export function History() {
             />
           ) : (
             <div className="text-gray-400 dark:text-gray-500 text-center py-8">No readings recorded</div>
+          )}
+          {selected.power_readings && selected.power_readings.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-md font-medium mb-2">Power</h4>
+              <PowerChart
+                data={selected.power_readings.map((pr): PowerDataPoint => ({
+                  time: new Date(pr.timestamp).toLocaleTimeString(),
+                  L1_A: Math.round(pr.l1_current * 10) / 10,
+                  L2_A: Math.round(pr.l2_current * 10) / 10,
+                  L1_W: Math.round(pr.l1_power),
+                  L2_W: Math.round(pr.l2_power),
+                }))}
+                height={250}
+              />
+            </div>
           )}
         </div>
       </div>

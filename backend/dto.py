@@ -80,9 +80,22 @@ class ReadingResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PowerReadingResponse(BaseModel):
+    timestamp: str
+    l1_voltage: float
+    l1_current: float
+    l1_power: float
+    l2_voltage: float
+    l2_current: float
+    l2_power: float
+
+    model_config = {"from_attributes": True}
+
+
 class FiringDetailResponse(BaseModel):
     firing: FiringResponse
     readings: list[ReadingResponse]
+    power_readings: list[PowerReadingResponse] = []
 
 
 class FiringNotesUpdate(BaseModel):

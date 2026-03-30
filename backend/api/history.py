@@ -8,9 +8,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.dto import FiringDetailResponse, FiringNotesUpdate, FiringResponse, ReadingResponse
+from backend.dto import FiringDetailResponse, FiringNotesUpdate, FiringResponse, PowerReadingResponse, ReadingResponse
 from backend.models.database import get_session
-from backend.models.schemas import Firing, Reading
+from backend.models.schemas import Firing, PowerReading, Reading
 
 router = APIRouter()
 
@@ -53,7 +53,19 @@ async def get_firing(
         )
         for r in result.scalars().all()
     ]
-    return FiringDetailResponse(firing=_firing_to_response(firing), readings=readings)
+    power_result = await session.execute(
+        select(PowerReading)
+        .where(PowerReading.firing_id == firing_id)
+        .order_by(PowerReading.timestamp)
+    )
+    power_readings = [
+        PowerReadingResponse.model_validate(pr) for pr in power_result.scalars().all()
+    ]
+    return FiringDetailResponse(
+        firing=_firing_to_response(firing),
+        readings=readings,
+        power_readings=power_readings,
+    )
 
 
 @router.get("/firings/{firing_id}/csv")
