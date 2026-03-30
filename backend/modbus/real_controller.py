@@ -30,6 +30,11 @@ class RealController:
         self._last_request_time = 0.0
         self._lock = threading.Lock()
 
+    @property
+    def bus_lock(self) -> threading.Lock:
+        """Expose the serial bus lock for coordination with other Modbus devices."""
+        return self._lock
+
     def reconnect(self) -> None:
         """Close stale serial connection and recreate the Modbus instrument."""
         with self._lock:

@@ -44,18 +44,21 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         logger.info("WebSocket client disconnected (%d total)", len(_connections))
 
 
-async def broadcast_loop(state: ControllerState, interval: float = 2.0) -> None:
+async def broadcast_loop(state: ControllerState, power_state=None, interval: float = 2.0) -> None:
     """Continuously broadcast controller state to all WebSocket clients."""
     set_state(state)
     while True:
         if _connections:
-            data = json.dumps(state.snapshot())
+            snapshot = state.snapshot()
+            if power_state is not None:
+                snapshot.update(power_state.snapshot())
+            data = json.dumps(snapshot)
             dead: list[WebSocket] = []
-            for ws in list(_connections):
+            for ws_conn in list(_connections):
                 try:
-                    await ws.send_text(data)
+                    await ws_conn.send_text(data)
                 except Exception:
-                    dead.append(ws)
-            for ws in dead:
-                _connections.discard(ws)
+                    dead.append(ws_conn)
+            for ws_conn in dead:
+                _connections.discard(ws_conn)
         await asyncio.sleep(interval)
