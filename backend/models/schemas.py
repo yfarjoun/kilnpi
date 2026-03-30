@@ -60,6 +60,9 @@ class Firing(Base):
     readings: Mapped[list[Reading]] = relationship(
         back_populates="firing", cascade="all, delete-orphan"
     )
+    power_readings: Mapped[list[PowerReading]] = relationship(
+        back_populates="firing", cascade="all, delete-orphan"
+    )
 
 
 class Reading(Base):
@@ -76,3 +79,21 @@ class Reading(Base):
     firing: Mapped[Firing] = relationship(back_populates="readings")
 
     __table_args__ = (Index("idx_readings_firing_ts", "firing_id", "timestamp"),)
+
+
+class PowerReading(Base):
+    __tablename__ = "power_readings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    firing_id: Mapped[int] = mapped_column(ForeignKey("firings.id"), nullable=False)
+    timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    l1_voltage: Mapped[float] = mapped_column(nullable=False)
+    l1_current: Mapped[float] = mapped_column(nullable=False)
+    l1_power: Mapped[float] = mapped_column(nullable=False)
+    l2_voltage: Mapped[float] = mapped_column(nullable=False)
+    l2_current: Mapped[float] = mapped_column(nullable=False)
+    l2_power: Mapped[float] = mapped_column(nullable=False)
+
+    firing: Mapped[Firing] = relationship(back_populates="power_readings")
+
+    __table_args__ = (Index("idx_power_readings_firing_ts", "firing_id", "timestamp"),)
