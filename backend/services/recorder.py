@@ -7,8 +7,9 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from backend.models.database import async_session
-from backend.models.schemas import Firing, Reading
+from backend.models.schemas import Firing, PowerReading, Reading
 from backend.services.poller import ControllerState
+from backend.services.power_poller import PowerState
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +17,15 @@ logger = logging.getLogger(__name__)
 class Recorder:
     """Monitors controller state and records readings when a program is running."""
 
-    def __init__(self, state: ControllerState, interval: float = 2.0) -> None:
+    def __init__(
+        self,
+        state: ControllerState,
+        interval: float = 2.0,
+        power_state: PowerState | None = None,
+    ) -> None:
         self._state = state
         self._interval = interval
+        self._power_state = power_state
         self._current_firing_id: int | None = None
         self._was_running = False
 
@@ -113,4 +120,23 @@ class Recorder:
                 segment=snapshot.get("program_segment") or snapshot["segment"],
             )
             session.add(reading)
+            await self._record_power_reading(session, now)
             await session.commit()
+
+    async def _record_power_reading(self, session, timestamp: str) -> None:
+        if self._current_firing_id is None or self._power_state is None:
+            return
+        snap = self._power_state.snapshot()
+        if snap["l1_current"] is None:
+            return
+        pr = PowerReading(
+            firing_id=self._current_firing_id,
+            timestamp=timestamp,
+            l1_voltage=snap["l1_voltage"],
+            l1_current=snap["l1_current"],
+            l1_power=snap["l1_power"],
+            l2_voltage=snap["l2_voltage"],
+            l2_current=snap["l2_current"],
+            l2_power=snap["l2_power"],
+        )
+        session.add(pr)
