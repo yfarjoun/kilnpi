@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from backend.modbus.registers import RunMode
 from backend.services.buttons import ButtonState
 from backend.services.poller import ControllerState
+from backend.services.power_poller import PowerState
 
 logger = logging.getLogger(__name__)
 
@@ -282,12 +283,14 @@ class DisplayService:
         interval: float = 5.0,
         button_state: ButtonState | None = None,
         display: MockDisplay | OledDisplay | None = None,
+        power_state: PowerState | None = None,
     ) -> None:
         self._state = state
         self._ws_client_count = ws_client_count
         self._interval = interval
         self._button_state = button_state
         self._display = display or _create_display()
+        self._power_state = power_state
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
@@ -365,7 +368,13 @@ class DisplayService:
 
         poll_age = get_poll_age_sec(self._state)
         modbus = "MB+" if self._state.last_poll_ok else "MB-"
-        if poll_age < 0:
+
+        # Line 3: power data if available, otherwise poll age
+        if self._power_state and self._power_state.l1 is not None:
+            l1_a = self._power_state.l1.current
+            l2_a = self._power_state.l2.current if self._power_state.l2 else 0
+            poll_str = f"L1:{l1_a:.1f}A L2:{l2_a:.1f}A"
+        elif poll_age < 0:
             poll_str = "Poll: --"
         else:
             poll_str = f"Poll: {poll_age}s ago"
@@ -422,9 +431,21 @@ class DisplayService:
         ]
 
     def _program_detail(self) -> list[str]:
-        """Expanded program info: name, segment, PV/SP, elapsed."""
+        """Expanded program/power info."""
         if self._state.run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
+            # Show power info when idle
+            if self._power_state and self._power_state.l1 is not None:
+                l1 = self._power_state.l1
+                l2 = self._power_state.l2
+                total_w = (l1.power + l2.power) if l2 else l1.power
+                return [
+                    f"L1: {l1.current:.1f}A {l1.power:.0f}W",
+                    f"L2: {l2.current:.1f}A {l2.power:.0f}W" if l2 else "L2: --",
+                    f"Total: {total_w:.0f}W",
+                    f"V: {l1.voltage:.0f}V PF:{l1.power_factor:.2f}",
+                ]
             return ["Prog: --", "No program", "running", ""]
+
         name = self._state.active_program_name or "Unknown"
         snap = self._state.snapshot()
         seg = snap.get("program_segment") or self._state.segment
@@ -432,10 +453,20 @@ class DisplayService:
         target = snap.get("program_target_temp")
         sp = target if target is not None else self._state.sp
         elapsed = self._state.segment_elapsed_min
-        status = "PAUSED" if self._state.run_mode == RunMode.STANDBY else ""
+        run_status = "PAUSED" if self._state.run_mode == RunMode.STANDBY else ""
+
+        # Show total current on line 4 when power data available
+        if self._power_state and self._power_state.l1 is not None:
+            l1 = self._power_state.l1
+            l2 = self._power_state.l2
+            total_a = l1.current + (l2.current if l2 else 0)
+            line4 = f"{total_a:.1f}A {elapsed}min"
+        else:
+            line4 = f"Elapsed: {elapsed} min"
+
         return [
-            f"Prog: {name} {status}".strip(),
+            f"Prog: {name} {run_status}".strip(),
             f"Segment {seg}",
             f"PV: {pv:.0f} SP: {sp:.0f}",
-            f"Elapsed: {elapsed} min",
+            line4,
         ]
