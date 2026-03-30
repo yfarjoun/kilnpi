@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useStatus } from '../hooks/useStatus';
 import { FiringChart } from '../components/FiringChart';
+import { PowerChart } from '../components/PowerChart';
 import { StatusBar } from '../components/StatusBar';
 import type { Reading } from '../types';
+import type { PowerDataPoint } from '../components/PowerChart';
 
 export function Monitor() {
   const status = useStatus();
   const [readings, setReadings] = useState<Reading[]>([]);
+  const [powerData, setPowerData] = useState<PowerDataPoint[]>([]);
   const [paused, setPaused] = useState(false);
   const maxPoints = 500;
 
@@ -22,6 +25,23 @@ export function Monitor() {
           segment: status.segment,
         };
         const updated = [...prev, newReading];
+        return updated.length > maxPoints ? updated.slice(-maxPoints) : updated;
+      });
+    }
+  }, [status, paused]);
+
+  useEffect(() => {
+    if (status && !paused && status.l1_current !== null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- accumulating streaming WebSocket data
+      setPowerData((prev) => {
+        const point: PowerDataPoint = {
+          time: new Date(status.timestamp).toLocaleTimeString(),
+          L1_A: Math.round(status.l1_current! * 10) / 10,
+          L2_A: Math.round(status.l2_current! * 10) / 10,
+          L1_W: Math.round(status.l1_power!),
+          L2_W: Math.round(status.l2_power!),
+        };
+        const updated = [...prev, point];
         return updated.length > maxPoints ? updated.slice(-maxPoints) : updated;
       });
     }
@@ -44,7 +64,7 @@ export function Monitor() {
             {paused ? 'Resume' : 'Pause'}
           </button>
           <button
-            onClick={() => setReadings([])}
+            onClick={() => { setReadings([]); setPowerData([]); }}
             className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm text-gray-700 dark:text-white"
           >
             Clear Chart
@@ -61,6 +81,34 @@ export function Monitor() {
           </div>
         )}
       </div>
+
+      {powerData.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm dark:shadow-none">
+          <h3 className="text-lg font-medium mb-2">Power</h3>
+          <PowerChart data={powerData} height={250} />
+        </div>
+      )}
+
+      {status && status.total_current !== null && (
+        <div className="grid grid-cols-4 gap-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
+            <div className="text-sm text-gray-500 dark:text-gray-400">L1</div>
+            <div className="text-2xl font-bold text-amber-500 dark:text-amber-400">{status.l1_current?.toFixed(1)}A</div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
+            <div className="text-sm text-gray-500 dark:text-gray-400">L2</div>
+            <div className="text-2xl font-bold text-violet-500 dark:text-violet-400">{status.l2_current?.toFixed(1)}A</div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
+            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{status.total_current?.toFixed(1)}A</div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Power</div>
+            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{status.total_power?.toFixed(0)}W</div>
+          </div>
+        </div>
+      )}
 
       {status && (
         <div className="grid grid-cols-4 gap-4 text-center">
