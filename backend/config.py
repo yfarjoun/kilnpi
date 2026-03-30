@@ -39,6 +39,11 @@ class Settings:
     slave_address: int = 1
     min_request_interval_ms: int = 300
 
+    # PZEM power meters (addresses on same Modbus bus)
+    pzem_l1_address: int = 2
+    pzem_l2_address: int = 3
+    pzem_poll_interval_sec: float = 5.0
+
     # Database
     db_path: str = field(
         default_factory=lambda: os.environ.get(
