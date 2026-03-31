@@ -5,6 +5,7 @@ import { Programs } from './pages/Programs';
 import { History } from './pages/History';
 import { Statistics } from './pages/Statistics';
 import { Settings } from './pages/Settings';
+import { PiStatus } from './pages/PiStatus';
 import { useTheme } from './hooks/useTheme';
 
 const navItems = [
@@ -13,6 +14,7 @@ const navItems = [
   { path: '/programs', label: 'Programs' },
   { path: '/history', label: 'History' },
   { path: '/statistics', label: 'Statistics' },
+  { path: '/pi', label: 'Pi' },
   { path: '/settings', label: 'Settings' },
 ];
 
@@ -55,6 +57,7 @@ export default function App() {
             <Route path="/programs" element={<Programs />} />
             <Route path="/history" element={<History />} />
             <Route path="/statistics" element={<Statistics />} />
+            <Route path="/pi" element={<PiStatus />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

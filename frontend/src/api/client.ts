@@ -129,4 +129,6 @@ export const api = {
     request<import('../types').FiringStats>(`/stats/firing/${id}`),
 
   getHealthTrend: () => request<import('../types').HealthTrend[]>('/stats/health'),
+
+  getSystemInfo: () => request<import('../types').SystemInfo>('/system'),
 };
