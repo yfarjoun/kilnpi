@@ -192,6 +192,33 @@ def get_ip_address() -> str:
         return "--"
 
 
+def get_usb_gadget_status() -> str:
+    """USB gadget (usb0) status: IP if up with one, 'up' if up sans IP, else 'off'.
+
+    Useful for headless recovery: when WiFi is down but the Pi is connected to a
+    host machine via the data-USB port with dwc2/g_ether enabled, this surfaces
+    the link-local IP to SSH into.
+    """
+    if platform.system() == "Darwin":
+        return "off"
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show", "usb0"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode != 0:
+            return "off"
+        for token in result.stdout.split():
+            # Match a CIDR address token like "169.254.7.1/16"
+            if token.count(".") == 3 and "/" in token:
+                return token.split("/")[0]
+        return "up"
+    except Exception:
+        return "off"
+
+
 def is_wifi_connected() -> bool:
     """Check if WiFi is connected."""
     try:
@@ -413,9 +440,8 @@ class DisplayService:
         ]
 
     def _network_detail(self) -> list[str]:
-        """Expanded network info: IP, WiFi, browsers, Modbus."""
+        """Expanded network info: IP, WiFi, USB gadget, Modbus."""
         wifi_str = "Connected" if is_wifi_connected() else "Disconnected"
-        browsers = self._ws_client_count()
         poll_age = get_poll_age_sec(self._state)
         if not self._state.last_poll_ok:
             modbus_str = "Error"
@@ -426,7 +452,7 @@ class DisplayService:
         return [
             f"IP: {get_ip_address()}",
             f"WiFi: {wifi_str}",
-            f"Browsers: {browsers}",
+            f"USB: {get_usb_gadget_status()}",
             f"Modbus: {modbus_str}",
         ]
 

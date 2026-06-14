@@ -13,6 +13,7 @@ from backend.services.display import (
     get_memory_usage_pct,
     get_poll_age_sec,
     get_uptime,
+    get_usb_gadget_status,
     is_wifi_connected,
 )
 from backend.services.poller import ControllerState
@@ -68,6 +69,42 @@ def test_is_wifi_connected_fallback_on_error() -> None:
     ):
         result = is_wifi_connected()
     assert result is False
+
+
+def test_get_usb_gadget_status_returns_string() -> None:
+    result = get_usb_gadget_status()
+    assert isinstance(result, str)
+    assert result  # not empty
+
+
+def test_get_usb_gadget_status_off_when_interface_missing() -> None:
+    # `ip ... show usb0` returns non-zero when usb0 doesn't exist
+    with patch(
+        "backend.services.display.subprocess.run",
+        return_value=type("R", (), {"returncode": 1, "stdout": ""}),
+    ), patch("backend.services.display.platform.system", return_value="Linux"):
+        assert get_usb_gadget_status() == "off"
+
+
+def test_get_usb_gadget_status_extracts_ip() -> None:
+    # Simulates real `ip -4 -o addr show usb0` output
+    fake_stdout = (
+        "3: usb0    inet 169.254.7.1/16 brd 169.254.255.255 scope global usb0\n"
+    )
+    with patch(
+        "backend.services.display.subprocess.run",
+        return_value=type("R", (), {"returncode": 0, "stdout": fake_stdout}),
+    ), patch("backend.services.display.platform.system", return_value="Linux"):
+        assert get_usb_gadget_status() == "169.254.7.1"
+
+
+def test_get_usb_gadget_status_up_without_ip() -> None:
+    # Interface exists but has no IPv4 assigned yet
+    with patch(
+        "backend.services.display.subprocess.run",
+        return_value=type("R", (), {"returncode": 0, "stdout": ""}),
+    ), patch("backend.services.display.platform.system", return_value="Linux"):
+        assert get_usb_gadget_status() == "up"
 
 
 def test_get_poll_age_no_timestamp() -> None:
@@ -304,7 +341,7 @@ def test_system_detail_mode() -> None:
 
 
 def test_network_detail_mode() -> None:
-    """KEY2 → expanded network info (IP, WiFi, browsers, Modbus)."""
+    """KEY2 → expanded network info (IP, WiFi, USB gadget, Modbus)."""
     from backend.modbus.registers import RunMode
 
     state = ControllerState()
@@ -333,7 +370,7 @@ def test_network_detail_mode() -> None:
     assert len(lines) == 4
     assert lines[0].startswith("IP:")
     assert lines[1].startswith("WiFi:")
-    assert lines[2] == "Browsers: 3"
+    assert lines[2].startswith("USB:")
     assert lines[3].startswith("Modbus: OK")
 
 
