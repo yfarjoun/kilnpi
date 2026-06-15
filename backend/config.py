@@ -25,10 +25,12 @@ def _is_mock_mode() -> bool:
         return True
     if "--mock" in sys.argv:
         return True
-    # Auto-detect: no serial port available → mock mode
-    if platform.system() == "Darwin":
-        return True
-    return _detect_serial_port() is None
+    # Mac dev environment: default to mock (no Modbus hardware expected).
+    # On the Pi, never silently fall back to mock when the adapter is missing —
+    # the OLED would then misleadingly show MB+ (mock polls always succeed).
+    # The RealController handles a missing port lazily; polls just fail and
+    # surface as MB- on the OLED until the FTDI is plugged in.
+    return platform.system() == "Darwin"
 
 
 @dataclass
