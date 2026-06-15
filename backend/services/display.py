@@ -22,6 +22,12 @@ from backend.services.power_poller import PowerState
 
 logger = logging.getLogger(__name__)
 
+# Poll age beyond which Modbus is considered stale even if last_poll_ok is True.
+# Guards against a dead/stuck poller thread or a silently unplugged adapter
+# leaving the "OK" flag at its last-good value. Poller interval defaults to 2s,
+# so 15s gives ample headroom for a few missed polls before flagging stale.
+MODBUS_STALE_AFTER_SEC = 15
+
 
 class MockDisplay:
     """Console-based mock for development without hardware."""
@@ -394,7 +400,16 @@ class DisplayService:
         browser = "B+" if browsers > 0 else "B-"
 
         poll_age = get_poll_age_sec(self._state)
-        modbus = "MB+" if self._state.last_poll_ok else "MB-"
+        modbus_fresh = (
+            self._state.last_poll_ok
+            and 0 <= poll_age < MODBUS_STALE_AFTER_SEC
+        )
+        modbus = "MB+" if modbus_fresh else "MB-"
+
+        # USB indicator only when the gadget interface actually exists,
+        # otherwise it would just be noise on the steady-state display.
+        usb_status = get_usb_gadget_status()
+        usb_indicator = " U+" if usb_status != "off" else ""
 
         # Line 3: power data if available, otherwise poll age
         if self._power_state and self._power_state.l1 is not None:
@@ -425,7 +440,7 @@ class DisplayService:
 
         return [
             f"D:{disk}% M:{mem}% CPU:{cpu:.0f}C",
-            f"{ip_short} {wifi} {browser} {modbus}",
+            f"{ip_short} {wifi} {browser}{usb_indicator} {modbus}",
             poll_str,
             line4,
         ]
@@ -440,19 +455,22 @@ class DisplayService:
         ]
 
     def _network_detail(self) -> list[str]:
-        """Expanded network info: IP, WiFi, USB gadget, Modbus."""
+        """Expanded network info: IP, WiFi, browsers, Modbus."""
         wifi_str = "Connected" if is_wifi_connected() else "Disconnected"
+        browsers = self._ws_client_count()
         poll_age = get_poll_age_sec(self._state)
         if not self._state.last_poll_ok:
             modbus_str = "Error"
         elif poll_age < 0:
             modbus_str = "No data"
+        elif poll_age >= MODBUS_STALE_AFTER_SEC:
+            modbus_str = f"Stale ({poll_age}s)"
         else:
             modbus_str = f"OK ({poll_age}s ago)"
         return [
             f"IP: {get_ip_address()}",
             f"WiFi: {wifi_str}",
-            f"USB: {get_usb_gadget_status()}",
+            f"Browsers: {browsers}",
             f"Modbus: {modbus_str}",
         ]
 

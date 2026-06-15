@@ -186,6 +186,36 @@ def test_display_service_formats_lines() -> None:
     assert "200" in lines[3]  # sp
 
 
+def test_modbus_shows_minus_when_poll_is_stale() -> None:
+    """If last_poll_ok is True but the poll is old, the compact view should show MB-.
+
+    Guards against a stale 'OK' flag from a dead/stuck poller thread or a
+    silently unplugged FTDI: the user observed MB+ persisting after disconnect.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    shown_lines: list[list[str]] = []
+
+    class CapturingDisplay:
+        def show(self, lines: list[str], **kwargs: object) -> None:
+            shown_lines.append(lines)
+
+    state = ControllerState()
+    state.last_poll_ok = True
+    # Forge a 30s-old timestamp directly — beyond MODBUS_STALE_AFTER_SEC=15.
+    state.timestamp = (datetime.now(UTC) - timedelta(seconds=30)).isoformat()
+
+    service = DisplayService(state, lambda: 0, interval=0.05)
+    service._display = CapturingDisplay()  # type: ignore[assignment]
+    service.start()
+    time.sleep(0.15)
+    service.stop()
+
+    assert len(shown_lines) >= 1
+    lines = shown_lines[0]
+    assert "MB-" in lines[1], f"expected MB- (stale poll), got: {lines[1]!r}"
+
+
 def test_display_shows_idle_when_not_running() -> None:
     """Line 4 shows 'Idle' when no program running."""
     shown_lines: list[list[str]] = []
@@ -341,7 +371,7 @@ def test_system_detail_mode() -> None:
 
 
 def test_network_detail_mode() -> None:
-    """KEY2 → expanded network info (IP, WiFi, USB gadget, Modbus)."""
+    """KEY2 → expanded network info (IP, WiFi, browsers, Modbus)."""
     from backend.modbus.registers import RunMode
 
     state = ControllerState()
@@ -370,7 +400,7 @@ def test_network_detail_mode() -> None:
     assert len(lines) == 4
     assert lines[0].startswith("IP:")
     assert lines[1].startswith("WiFi:")
-    assert lines[2].startswith("USB:")
+    assert lines[2] == "Browsers: 3"
     assert lines[3].startswith("Modbus: OK")
 
 
