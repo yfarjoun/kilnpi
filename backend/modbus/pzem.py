@@ -41,7 +41,20 @@ class PzemReader:
         self._min_interval = 0.3  # 300 ms between requests
         self._last_request_time = 0.0
         self._lock = threading.Lock()
-        self._instrument = self._make_instrument()
+        self._instrument: minimalmodbus.Instrument | None = None
+        # Try eagerly so the happy path logs success at startup, but never
+        # crash here: if the FTDI is unplugged at boot, _ensure_open() will
+        # retry on first read. Otherwise the whole kilnpi service goes down
+        # along with the OLED app and web UI.
+        try:
+            self._instrument = self._make_instrument()
+            logger.info("PZEM-016 opened on %s (addr %d)", self._port, self._address)
+        except Exception as e:
+            logger.warning(
+                "PZEM-016 port %s unavailable at startup (%s); will retry on first read",
+                self._port,
+                e,
+            )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -49,12 +62,20 @@ class PzemReader:
 
     def _make_instrument(self) -> minimalmodbus.Instrument:
         instrument = minimalmodbus.Instrument(self._port, self._address)
-        instrument.serial.baudrate = self._baud_rate
-        instrument.serial.bytesize = 8
-        instrument.serial.parity = minimalmodbus.serial.PARITY_NONE
-        instrument.serial.stopbits = 1
-        instrument.serial.timeout = 1.0
+        ser = instrument.serial
+        assert ser is not None  # minimalmodbus opens the port in __init__
+        ser.baudrate = self._baud_rate
+        ser.bytesize = 8
+        ser.parity = minimalmodbus.serial.PARITY_NONE
+        ser.stopbits = 1
+        ser.timeout = 1.0
         return instrument
+
+    def _ensure_open(self) -> minimalmodbus.Instrument:
+        """Return the open instrument, opening it lazily if needed. Raises if it can't open."""
+        if self._instrument is None:
+            self._instrument = self._make_instrument()
+        return self._instrument
 
     def _throttle(self) -> None:
         """Ensure at least 300 ms between successive Modbus requests."""
@@ -68,20 +89,25 @@ class PzemReader:
     # ------------------------------------------------------------------
 
     def reconnect(self) -> None:
-        """Close stale serial connection and recreate the Modbus instrument."""
+        """Close any stale serial connection and re-open the Modbus instrument."""
         with self._lock:
-            try:
-                self._instrument.serial.close()
-            except Exception:
-                pass
-            self._instrument = self._make_instrument()
+            if self._instrument is not None:
+                ser = self._instrument.serial
+                if ser is not None:
+                    try:
+                        ser.close()
+                    except Exception:
+                        pass
+                self._instrument = None
+            self._instrument = self._make_instrument()  # raises if hardware still absent
             logger.info("Reconnected PZEM-016 instrument on %s (addr %d)", self._port, self._address)
 
     def read(self) -> PzemReading:
         """Read all 10 input registers in a single FC=4 call and return a PzemReading."""
         with self._lock:
+            inst = self._ensure_open()
             self._throttle()
-            regs = self._instrument.read_registers(_REG_VOLTAGE, _NUM_INPUT_REGS, functioncode=4)
+            regs = inst.read_registers(_REG_VOLTAGE, _NUM_INPUT_REGS, functioncode=4)
 
         # Parse raw register values according to the PZEM-016 register map.
         voltage = regs[0] * 0.1                                        # ×0.1 V
@@ -118,11 +144,13 @@ def set_pzem_address(
         raise ValueError(f"new_address must be 1–247, got {new_address}")
 
     instrument = minimalmodbus.Instrument(port, current_address)
-    instrument.serial.baudrate = baud_rate
-    instrument.serial.bytesize = 8
-    instrument.serial.parity = minimalmodbus.serial.PARITY_NONE
-    instrument.serial.stopbits = 1
-    instrument.serial.timeout = 1.0
+    ser = instrument.serial
+    assert ser is not None  # minimalmodbus opens the port in __init__
+    ser.baudrate = baud_rate
+    ser.bytesize = 8
+    ser.parity = minimalmodbus.serial.PARITY_NONE
+    ser.stopbits = 1
+    ser.timeout = 1.0
 
     instrument.write_register(_REG_SLAVE_ADDRESS, new_address, functioncode=6)
     logger.info(
