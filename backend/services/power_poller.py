@@ -99,26 +99,47 @@ class PowerPoller:
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
-            try:
-                if self._bus_lock is not None:
-                    with self._bus_lock:
-                        l1 = self._l1_reader.read()
-                        l2 = self._l2_reader.read()
-                else:
-                    l1 = self._l1_reader.read()
-                    l2 = self._l2_reader.read()
+            # Read each PZEM independently so one failed reader doesn't blank
+            # both channels — and so the surviving channel's reading isn't lost
+            # to an all-or-nothing exception path.
+            l1: PzemReading | None = None
+            l2: PzemReading | None = None
+            l1_err: Exception | None = None
+            l2_err: Exception | None = None
 
-                self._state.update(l1, l2)
-                self._state.last_poll_ok = True
-            except Exception as exc:
-                self._state.last_poll_ok = False
-                logger.exception("PowerPoller error")
-                if isinstance(exc, OSError):
-                    for reader in (self._l1_reader, self._l2_reader):
-                        if hasattr(reader, "reconnect"):
-                            try:
-                                reader.reconnect()
-                            except Exception:
-                                logger.exception("PowerPoller reconnect failed")
+            if self._bus_lock is not None:
+                with self._bus_lock:
+                    l1, l1_err = self._safe_read(self._l1_reader, "L1")
+                    l2, l2_err = self._safe_read(self._l2_reader, "L2")
+            else:
+                l1, l1_err = self._safe_read(self._l1_reader, "L1")
+                l2, l2_err = self._safe_read(self._l2_reader, "L2")
+
+            # update() takes None for a failed reader; display + snapshot
+            # treat None as "no fresh data" instead of showing stale values.
+            self._state.update(l1, l2)
+            self._state.last_poll_ok = l1_err is None and l2_err is None
+
+            # Try to recover any reader that just failed with an OSError
+            # (USB disconnect, stale fd, etc.) — same pattern as the kiln poller.
+            for reader, err, label in (
+                (self._l1_reader, l1_err, "L1"),
+                (self._l2_reader, l2_err, "L2"),
+            ):
+                if isinstance(err, OSError) and hasattr(reader, "reconnect"):
+                    try:
+                        reader.reconnect()
+                    except Exception:
+                        logger.exception("PowerPoller %s reconnect failed", label)
 
             self._stop_event.wait(self._interval)
+
+    @staticmethod
+    def _safe_read(
+        reader, label: str
+    ) -> tuple["PzemReading | None", "Exception | None"]:
+        try:
+            return reader.read(), None
+        except Exception as e:
+            logger.exception("PowerPoller %s read failed", label)
+            return None, e
