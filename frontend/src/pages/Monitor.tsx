@@ -3,6 +3,7 @@ import { useStatus } from '../hooks/useStatus';
 import { FiringChart } from '../components/FiringChart';
 import { PowerChart } from '../components/PowerChart';
 import { StatusBar } from '../components/StatusBar';
+import { api } from '../api/client';
 import type { Reading } from '../types';
 import type { PowerDataPoint } from '../components/PowerChart';
 
@@ -12,9 +13,45 @@ export function Monitor() {
   const [powerData, setPowerData] = useState<PowerDataPoint[]>([]);
   const [paused, setPaused] = useState(false);
   // Time-based retention: keep the last 2 hours of points regardless of
-  // how fast the websocket broadcasts. (For a full firing's worth of
-  // live history, use the History tab — readings persist to the DB.)
+  // how fast the websocket broadcasts. The chart's brush at the bottom
+  // lets you zoom to any sub-range. For a full firing's worth of
+  // history, use the History tab.
   const retentionMs = 2 * 60 * 60 * 1000;
+
+  // On mount, back-fill the buffer from the most recent firing's
+  // persisted readings so you don't stare at an empty chart while live
+  // data trickles in.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const firings = await api.listFirings();
+        if (!firings.length) return;
+        const detail = await api.getFiring(firings[0].id);
+        if (cancelled) return;
+        const cutoff = Date.now() - retentionMs;
+        const recentReadings = detail.readings.filter(
+          (r) => new Date(r.timestamp).getTime() >= cutoff,
+        );
+        if (recentReadings.length) setReadings(recentReadings);
+        const recentPower: PowerDataPoint[] = detail.power_readings
+          .filter((p) => new Date(p.timestamp).getTime() >= cutoff)
+          .map((p) => ({
+            time: new Date(p.timestamp).toLocaleTimeString(),
+            ts: new Date(p.timestamp).getTime(),
+            L1_A: Math.round(p.l1_current * 10) / 10,
+            L1_W: Math.round(p.l1_power),
+          }));
+        if (recentPower.length) setPowerData(recentPower);
+      } catch (e) {
+        console.error('Monitor preload failed:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount preload
+  }, []);
 
   useEffect(() => {
     if (status && !paused) {

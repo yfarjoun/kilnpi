@@ -7,6 +7,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Brush,
 } from 'recharts';
 
 export interface PowerDataPoint {
@@ -49,6 +50,7 @@ export function PowerChart({ data, height = 250, showPower = true }: PowerChartP
           <Line yAxisId="watts" type="monotone" dataKey="L1_W" name="Power"
             stroke="#F59E0B" dot={false} strokeWidth={1} strokeDasharray="5 5" />
         )}
+        <Brush dataKey="time" height={24} stroke="var(--chart-text)" travellerWidth={8} />
       </LineChart>
     </ResponsiveContainer>
   );

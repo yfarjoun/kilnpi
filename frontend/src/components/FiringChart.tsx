@@ -8,6 +8,7 @@ import {
   Legend,
   ReferenceLine,
   ResponsiveContainer,
+  Brush,
 } from 'recharts';
 import type { Reading } from '../types';
 
@@ -57,6 +58,7 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
         <Line yAxisId="temp" type="monotone" dataKey="PV" stroke="#EF4444" dot={false} strokeWidth={2} />
         <Line yAxisId="temp" type="monotone" dataKey="SP" stroke="#3B82F6" dot={false} strokeWidth={2} strokeDasharray="5 5" />
         <Line yAxisId="pct" type="monotone" dataKey="MV" stroke="#10B981" dot={false} strokeWidth={1} />
+        <Brush dataKey="time" height={24} stroke="var(--chart-text)" travellerWidth={8} />
         {cutoffIndex !== null && (
           <ReferenceLine
             yAxisId="temp"
