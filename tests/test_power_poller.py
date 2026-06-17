@@ -100,6 +100,27 @@ def test_no_response_error_does_not_trigger_reconnect() -> None:
     assert state.last_poll_ok is False
 
 
+def test_power_poller_works_with_l2_none() -> None:
+    """Single-PZEM mode: l2_reader=None must work — no read attempted, no
+    error logged, and state.l2 stays None while L1 polls normally."""
+    l1 = MockPzemReader("L1")
+    l1.set_mv(50)
+    state = PowerState()
+    poller = PowerPoller(l1, None, state, interval=0.05)
+    poller.start()
+
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        if state.l1 is not None:
+            break
+        time.sleep(0.02)
+    poller.stop()
+
+    assert state.l1 is not None, "L1 must poll normally"
+    assert state.l2 is None, "no L2 reader → state.l2 stays None"
+    assert state.last_poll_ok is True, "L1 ok + no L2 attempt → poll is ok"
+
+
 def test_serial_exception_does_trigger_reconnect() -> None:
     """pyserial SerialException (real hardware disconnect) SHOULD trigger
     reconnect — that's the case the recovery path was built for."""

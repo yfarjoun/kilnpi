@@ -88,7 +88,16 @@ class PowerState:
 
 
 class PowerPoller:
-    """Periodically reads both PZEM meters and updates shared PowerState."""
+    """Periodically reads PZEM meter(s) and updates shared PowerState.
+
+    L2 reader is optional — single-PZEM setups (one meter measuring total
+    current) pass l2_reader=None and only L1 is polled.
+    """
+
+    # Quiet-bus wait after acquiring bus_lock and before the first PZEM read.
+    # Lets the bus settle for >= PZEM's 100ms inter-command requirement when
+    # the kiln controller's poller has just released the lock.
+    BUS_QUIET_WAIT_SEC = 0.15
 
     def __init__(
         self,
@@ -99,7 +108,7 @@ class PowerPoller:
         bus_lock: threading.Lock | None = None,
     ) -> None:
         self._l1_reader = l1_reader
-        self._l2_reader = l2_reader
+        self._l2_reader = l2_reader  # may be None for single-PZEM setups
         self._state = state
         self._interval = interval
         self._bus_lock = bus_lock
@@ -119,6 +128,8 @@ class PowerPoller:
         logger.info("PowerPoller stopped")
 
     def _run(self) -> None:
+        import time as _time  # local alias to keep diff small
+
         while not self._stop_event.is_set():
             # Read each PZEM independently so one failed reader doesn't blank
             # both channels — and so the surviving channel's reading isn't lost
@@ -134,19 +145,30 @@ class PowerPoller:
             # controller read on the same port.
             if self._bus_lock is not None:
                 with self._bus_lock:
+                    # Give the bus a brief quiet window — the kiln poller's
+                    # last request may have just finished, and the PZEM needs
+                    # >= 100 ms between commands.
+                    _time.sleep(self.BUS_QUIET_WAIT_SEC)
                     l1, l1_err = self._safe_read(self._l1_reader, "L1")
-                    l2, l2_err = self._safe_read(self._l2_reader, "L2")
+                    if self._l2_reader is not None:
+                        l2, l2_err = self._safe_read(self._l2_reader, "L2")
                     self._maybe_reconnect(self._l1_reader, l1_err, "L1")
-                    self._maybe_reconnect(self._l2_reader, l2_err, "L2")
+                    if self._l2_reader is not None:
+                        self._maybe_reconnect(self._l2_reader, l2_err, "L2")
             else:
                 l1, l1_err = self._safe_read(self._l1_reader, "L1")
-                l2, l2_err = self._safe_read(self._l2_reader, "L2")
+                if self._l2_reader is not None:
+                    l2, l2_err = self._safe_read(self._l2_reader, "L2")
                 self._maybe_reconnect(self._l1_reader, l1_err, "L1")
-                self._maybe_reconnect(self._l2_reader, l2_err, "L2")
+                if self._l2_reader is not None:
+                    self._maybe_reconnect(self._l2_reader, l2_err, "L2")
 
-            # update() takes None for a failed reader; display + snapshot
-            # treat None as "no fresh data" instead of showing stale values.
+            # update() takes None for a failed (or absent) reader; display +
+            # snapshot treat None as "no fresh data" instead of showing
+            # stale values.
             self._state.update(l1, l2)
+            # When there's no L2 reader, l2_err stays None and last_poll_ok
+            # reflects only L1's outcome.
             self._state.last_poll_ok = l1_err is None and l2_err is None
 
             self._stop_event.wait(self._interval)
