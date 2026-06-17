@@ -25,7 +25,9 @@ def main() -> None:
     )
     parser.add_argument("--current", type=int, default=1, help="Current address (default: 1)")
     parser.add_argument("--new", type=int, required=True, help="New address (1-247)")
-    parser.add_argument("--port", type=str, default=None, help="Serial port (auto-detect if omitted)")
+    parser.add_argument(
+        "--port", type=str, default=None, help="Serial port (auto-detect if omitted)"
+    )
     args = parser.parse_args()
 
     if not 1 <= args.new <= 247:

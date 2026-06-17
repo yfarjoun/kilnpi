@@ -8,7 +8,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.dto import FiringDetailResponse, FiringNotesUpdate, FiringResponse, PowerReadingResponse, ReadingResponse
+from backend.dto import (
+    FiringDetailResponse,
+    FiringNotesUpdate,
+    FiringResponse,
+    PowerReadingResponse,
+    ReadingResponse,
+)
 from backend.models.database import get_session
 from backend.models.schemas import Firing, PowerReading, Reading
 

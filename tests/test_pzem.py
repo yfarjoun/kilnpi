@@ -5,8 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.modbus.pzem import PzemReading, PzemReader, set_pzem_address
-
+from backend.modbus.pzem import PzemReader, PzemReading, set_pzem_address
 
 # ---------------------------------------------------------------------------
 # PzemReading dataclass

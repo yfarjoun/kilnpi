@@ -100,7 +100,11 @@ class PzemReader:
                         pass
                 self._instrument = None
             self._instrument = self._make_instrument()  # raises if hardware still absent
-            logger.info("Reconnected PZEM-016 instrument on %s (addr %d)", self._port, self._address)
+            logger.info(
+                "Reconnected PZEM-016 instrument on %s (addr %d)",
+                self._port,
+                self._address,
+            )
 
     def read(self) -> PzemReading:
         """Read all 10 input registers in a single FC=4 call and return a PzemReading."""
