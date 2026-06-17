@@ -411,15 +411,18 @@ class DisplayService:
         usb_status = get_usb_gadget_status()
         usb_indicator = " U+" if usb_status != "off" else ""
 
-        # Line 3: power data if either channel has a fresh reading,
-        # otherwise poll age. Showing "L1:-- L2:X.XA" when only one is
-        # responding is more informative than falling back to poll age.
+        # Line 3: combined current/voltage/power if any PZEM has a fresh
+        # reading, otherwise poll age. Single-PZEM setups (total current via
+        # one meter) read the same field as multi-PZEM, the totals just sum
+        # to the one channel's value.
         l1 = self._power_state.l1 if self._power_state else None
         l2 = self._power_state.l2 if self._power_state else None
         if l1 is not None or l2 is not None:
-            l1_str = f"{l1.current:.1f}A" if l1 is not None else "--"
-            l2_str = f"{l2.current:.1f}A" if l2 is not None else "--"
-            poll_str = f"L1:{l1_str} L2:{l2_str}"
+            total_a = (l1.current if l1 else 0.0) + (l2.current if l2 else 0.0)
+            total_w = (l1.power if l1 else 0.0) + (l2.power if l2 else 0.0)
+            voltage_src = l1 if l1 is not None else l2
+            assert voltage_src is not None
+            poll_str = f"{total_a:.1f}A  {voltage_src.voltage:.0f}V  {total_w:.0f}W"
         elif poll_age < 0:
             poll_str = "Poll: --"
         else:
@@ -481,21 +484,21 @@ class DisplayService:
     def _program_detail(self) -> list[str]:
         """Expanded program/power info."""
         if self._state.run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
-            # Show power info when idle; handle either channel being None
-            # independently so a single-PZEM failure still shows the survivor.
+            # Show power info when idle. With a single PZEM measuring total
+            # current, sums collapse to one channel's value; the same code
+            # path works if a second PZEM is added later.
             l1 = self._power_state.l1 if self._power_state else None
             l2 = self._power_state.l2 if self._power_state else None
             if l1 is not None or l2 is not None:
+                total_a = (l1.current if l1 else 0.0) + (l2.current if l2 else 0.0)
                 total_w = (l1.power if l1 else 0.0) + (l2.power if l2 else 0.0)
-                # In the or-branch above, at least one of l1/l2 is non-None,
-                # so voltage_src can never end up None — the assert satisfies pyright.
                 voltage_src = l1 if l1 is not None else l2
-                assert voltage_src is not None
+                assert voltage_src is not None  # at least one is non-None
                 return [
-                    f"L1: {l1.current:.1f}A {l1.power:.0f}W" if l1 else "L1: --",
-                    f"L2: {l2.current:.1f}A {l2.power:.0f}W" if l2 else "L2: --",
-                    f"Total: {total_w:.0f}W",
-                    f"V: {voltage_src.voltage:.0f}V PF:{voltage_src.power_factor:.2f}",
+                    f"Current: {total_a:.1f} A",
+                    f"Voltage: {voltage_src.voltage:.0f} V",
+                    f"Power: {total_w:.0f} W",
+                    f"PF: {voltage_src.power_factor:.2f}",
                 ]
             return ["Prog: --", "No program", "running", ""]
 
