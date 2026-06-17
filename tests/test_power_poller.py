@@ -2,7 +2,9 @@
 
 import time
 
+import minimalmodbus  # type: ignore[import-untyped]
 import pytest
+import serial  # type: ignore[import-untyped]
 
 from backend.modbus.mock_pzem import MockPzemReader
 from backend.modbus.pzem import PzemReading
@@ -58,6 +60,59 @@ class _FailingReader:
 
     def read(self) -> PzemReading:
         raise RuntimeError("simulated PZEM failure")
+
+
+class _RecordingReader:
+    """Reader that records read/reconnect calls; configurable failure mode."""
+
+    def __init__(self, exc_factory=None) -> None:
+        self.read_calls = 0
+        self.reconnect_calls = 0
+        self._exc_factory = exc_factory
+
+    def read(self) -> PzemReading:
+        self.read_calls += 1
+        if self._exc_factory is not None:
+            raise self._exc_factory()
+        return _make_reading()
+
+    def reconnect(self) -> None:
+        self.reconnect_calls += 1
+
+
+def test_no_response_error_does_not_trigger_reconnect() -> None:
+    """minimalmodbus.NoResponseError is protocol-level, not a stale FD. It
+    inherits from IOError/OSError but must NOT trigger reconnect — doing so
+    closes the serial port shared across Instruments via minimalmodbus's
+    internal cache and leaves the kiln controller with a bad FD.
+    """
+    l1 = _RecordingReader(lambda: minimalmodbus.NoResponseError("no answer"))
+    l2 = _RecordingReader(lambda: minimalmodbus.NoResponseError("no answer"))
+    state = PowerState()
+    poller = PowerPoller(l1, l2, state, interval=0.05)
+    poller.start()
+    time.sleep(0.3)
+    poller.stop()
+
+    assert l1.read_calls > 0, "poller should still attempt reads"
+    assert l1.reconnect_calls == 0, "NoResponseError must not trigger reconnect"
+    assert l2.reconnect_calls == 0, "NoResponseError must not trigger reconnect"
+    assert state.last_poll_ok is False
+
+
+def test_serial_exception_does_trigger_reconnect() -> None:
+    """pyserial SerialException (real hardware disconnect) SHOULD trigger
+    reconnect — that's the case the recovery path was built for."""
+    l1 = _RecordingReader(lambda: serial.SerialException("device removed"))
+    l2 = MockPzemReader("L2")
+    l2.set_mv(50)
+    state = PowerState()
+    poller = PowerPoller(l1, l2, state, interval=0.05)
+    poller.start()
+    time.sleep(0.3)
+    poller.stop()
+
+    assert l1.reconnect_calls > 0, "SerialException must trigger reconnect"
 
 
 def test_power_poller_isolates_per_pzem_failure() -> None:

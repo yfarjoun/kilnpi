@@ -5,9 +5,30 @@ import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import minimalmodbus  # type: ignore[import-untyped]
+
 from backend.modbus.pzem import PzemReading
 
 logger = logging.getLogger(__name__)
+
+
+def _needs_reconnect(exc: BaseException) -> bool:
+    """True only for OS-level errors that indicate a stale file descriptor.
+
+    Crucially excludes minimalmodbus.ModbusException (NoResponseError,
+    InvalidResponseError, SlaveDeviceBusyError, etc.). Those inherit from
+    OSError because IOError is OSError in Python 3, but they are protocol-
+    level — the FD is fine, the slave just didn't reply or replied wrong.
+
+    Why this matters: minimalmodbus caches one serial.Serial per port name
+    across all Instruments. Calling reconnect() closes that shared port,
+    which leaves every *other* Instrument on the same port with a stale FD
+    that next reads as "Bad file descriptor". So we must only reconnect for
+    truly hardware-level failures.
+    """
+    if isinstance(exc, minimalmodbus.ModbusException):
+        return False
+    return isinstance(exc, OSError)
 
 
 @dataclass
@@ -107,32 +128,37 @@ class PowerPoller:
             l1_err: Exception | None = None
             l2_err: Exception | None = None
 
+            # Reconnect must happen INSIDE the bus lock: minimalmodbus caches
+            # one serial.Serial per port name across Instruments, so closing
+            # the underlying port to reconnect races with any concurrent
+            # controller read on the same port.
             if self._bus_lock is not None:
                 with self._bus_lock:
                     l1, l1_err = self._safe_read(self._l1_reader, "L1")
                     l2, l2_err = self._safe_read(self._l2_reader, "L2")
+                    self._maybe_reconnect(self._l1_reader, l1_err, "L1")
+                    self._maybe_reconnect(self._l2_reader, l2_err, "L2")
             else:
                 l1, l1_err = self._safe_read(self._l1_reader, "L1")
                 l2, l2_err = self._safe_read(self._l2_reader, "L2")
+                self._maybe_reconnect(self._l1_reader, l1_err, "L1")
+                self._maybe_reconnect(self._l2_reader, l2_err, "L2")
 
             # update() takes None for a failed reader; display + snapshot
             # treat None as "no fresh data" instead of showing stale values.
             self._state.update(l1, l2)
             self._state.last_poll_ok = l1_err is None and l2_err is None
 
-            # Try to recover any reader that just failed with an OSError
-            # (USB disconnect, stale fd, etc.) — same pattern as the kiln poller.
-            for reader, err, label in (
-                (self._l1_reader, l1_err, "L1"),
-                (self._l2_reader, l2_err, "L2"),
-            ):
-                if isinstance(err, OSError) and hasattr(reader, "reconnect"):
-                    try:
-                        reader.reconnect()
-                    except Exception:
-                        logger.exception("PowerPoller %s reconnect failed", label)
-
             self._stop_event.wait(self._interval)
+
+    @staticmethod
+    def _maybe_reconnect(reader, err: Exception | None, label: str) -> None:
+        if err is None or not _needs_reconnect(err) or not hasattr(reader, "reconnect"):
+            return
+        try:
+            reader.reconnect()
+        except Exception:
+            logger.exception("PowerPoller %s reconnect failed", label)
 
     @staticmethod
     def _safe_read(

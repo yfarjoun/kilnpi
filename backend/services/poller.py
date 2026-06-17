@@ -5,6 +5,8 @@ import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import minimalmodbus  # type: ignore[import-untyped]
+
 from backend.modbus.controller import ControllerInterface
 from backend.modbus.registers import RunMode
 
@@ -172,8 +174,18 @@ class Poller:
             except Exception as exc:
                 self._state.last_poll_ok = False
                 logger.exception("Polling error")
-                # USB disconnect leaves a stale fd — try to reconnect
-                if isinstance(exc, OSError) and hasattr(self._controller, "reconnect"):
+                # Reconnect only on OS-level disconnects, NOT on Modbus
+                # protocol errors. minimalmodbus.ModbusException inherits
+                # from IOError/OSError but indicates the slave didn't reply
+                # or replied wrong — the FD is fine. Reconnecting closes
+                # the serial port that minimalmodbus shares across all
+                # Instruments on the same /dev path, breaking other readers
+                # on the same bus (e.g. the PZEMs).
+                if (
+                    isinstance(exc, OSError)
+                    and not isinstance(exc, minimalmodbus.ModbusException)
+                    and hasattr(self._controller, "reconnect")
+                ):
                     try:
                         self._controller.reconnect()  # type: ignore[attr-defined]
                     except Exception:
