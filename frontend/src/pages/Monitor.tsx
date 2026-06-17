@@ -11,7 +11,10 @@ export function Monitor() {
   const [readings, setReadings] = useState<Reading[]>([]);
   const [powerData, setPowerData] = useState<PowerDataPoint[]>([]);
   const [paused, setPaused] = useState(false);
-  const maxPoints = 500;
+  // Time-based retention: keep the last 2 hours of points regardless of
+  // how fast the websocket broadcasts. (For a full firing's worth of
+  // live history, use the History tab — readings persist to the DB.)
+  const retentionMs = 2 * 60 * 60 * 1000;
 
   useEffect(() => {
     if (status && !paused) {
@@ -24,8 +27,8 @@ export function Monitor() {
           mv: status.mv,
           segment: status.segment,
         };
-        const updated = [...prev, newReading];
-        return updated.length > maxPoints ? updated.slice(-maxPoints) : updated;
+        const cutoff = Date.now() - retentionMs;
+        return [...prev, newReading].filter((r) => new Date(r.timestamp).getTime() >= cutoff);
       });
     }
   }, [status, paused]);
@@ -36,11 +39,12 @@ export function Monitor() {
       setPowerData((prev) => {
         const point: PowerDataPoint = {
           time: new Date(status.timestamp).toLocaleTimeString(),
+          ts: new Date(status.timestamp).getTime(),
           L1_A: Math.round(status.l1_current! * 10) / 10,
           L1_W: Math.round(status.l1_power!),
         };
-        const updated = [...prev, point];
-        return updated.length > maxPoints ? updated.slice(-maxPoints) : updated;
+        const cutoff = Date.now() - retentionMs;
+        return [...prev, point].filter((p) => (p.ts ?? 0) >= cutoff);
       });
     }
   }, [status, paused]);

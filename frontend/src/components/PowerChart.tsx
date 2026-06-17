@@ -11,6 +11,7 @@ import {
 
 export interface PowerDataPoint {
   time: string;
+  ts?: number;  // epoch ms; used by Monitor for time-based retention, ignored by recharts
   L1_A: number;
   L1_W: number;
 }
