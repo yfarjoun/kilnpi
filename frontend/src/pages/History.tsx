@@ -152,9 +152,7 @@ export function History() {
                 data={selected.power_readings.map((pr): PowerDataPoint => ({
                   time: new Date(pr.timestamp).toLocaleTimeString(),
                   L1_A: Math.round(pr.l1_current * 10) / 10,
-                  L2_A: Math.round(pr.l2_current * 10) / 10,
                   L1_W: Math.round(pr.l1_power),
-                  L2_W: Math.round(pr.l2_power),
                 }))}
                 height={250}
               />

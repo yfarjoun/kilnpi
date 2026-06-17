@@ -87,12 +87,12 @@ class PowerReading(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     firing_id: Mapped[int] = mapped_column(ForeignKey("firings.id"), nullable=False)
     timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    # Single-PZEM setup: one meter measures total voltage/current/power.
+    # Field names retain the l1_ prefix for DB and API compatibility; an L2
+    # column set used to exist, dropped by the init_db migration.
     l1_voltage: Mapped[float] = mapped_column(nullable=False)
     l1_current: Mapped[float] = mapped_column(nullable=False)
     l1_power: Mapped[float] = mapped_column(nullable=False)
-    l2_voltage: Mapped[float] = mapped_column(nullable=False)
-    l2_current: Mapped[float] = mapped_column(nullable=False)
-    l2_power: Mapped[float] = mapped_column(nullable=False)
 
     firing: Mapped[Firing] = relationship(back_populates="power_readings")
 

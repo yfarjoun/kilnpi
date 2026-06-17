@@ -1,7 +1,8 @@
-"""Background power-meter polling loop for PZEM-016 readers."""
+"""Background power-meter polling loop for the PZEM-016 reader."""
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -33,82 +34,55 @@ def _needs_reconnect(exc: BaseException) -> bool:
 
 @dataclass
 class PowerState:
-    """Thread-safe holder for the latest L1/L2 power readings."""
+    """Thread-safe holder for the latest PZEM-016 power reading."""
 
     l1: PzemReading | None = None
-    l2: PzemReading | None = None
     timestamp: str = ""
     last_poll_ok: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def update(self, l1: PzemReading | None, l2: PzemReading | None) -> None:
+    def update(self, l1: PzemReading | None) -> None:
         with self._lock:
             self.l1 = l1
-            self.l2 = l2
             self.timestamp = datetime.now(UTC).isoformat()
 
     def snapshot(self) -> dict:
         with self._lock:
             l1 = self.l1
-            l2 = self.l2
             ts = self.timestamp
 
-        if l1 is None and l2 is None:
+        if l1 is None:
             return {
                 "power_timestamp": ts or None,
                 "l1_voltage": None,
                 "l1_current": None,
                 "l1_power": None,
-                "l2_voltage": None,
-                "l2_current": None,
-                "l2_power": None,
-                "total_current": None,
-                "total_power": None,
             }
 
         return {
             "power_timestamp": ts,
-            "l1_voltage": l1.voltage if l1 is not None else None,
-            "l1_current": l1.current if l1 is not None else None,
-            "l1_power": l1.power if l1 is not None else None,
-            "l2_voltage": l2.voltage if l2 is not None else None,
-            "l2_current": l2.current if l2 is not None else None,
-            "l2_power": l2.power if l2 is not None else None,
-            "total_current": round(
-                (l1.current if l1 is not None else 0.0)
-                + (l2.current if l2 is not None else 0.0),
-                3,
-            ),
-            "total_power": round(
-                (l1.power if l1 is not None else 0.0)
-                + (l2.power if l2 is not None else 0.0),
-                1,
-            ),
+            "l1_voltage": l1.voltage,
+            "l1_current": l1.current,
+            "l1_power": l1.power,
         }
 
 
 class PowerPoller:
-    """Periodically reads PZEM meter(s) and updates shared PowerState.
+    """Periodically reads the PZEM-016 and updates the shared PowerState."""
 
-    L2 reader is optional — single-PZEM setups (one meter measuring total
-    current) pass l2_reader=None and only L1 is polled.
-    """
-
-    # Quiet-bus wait after acquiring bus_lock and before the first PZEM read.
-    # Lets the bus settle for >= PZEM's 100ms inter-command requirement when
-    # the kiln controller's poller has just released the lock.
+    # Quiet-bus wait after acquiring bus_lock and before the PZEM read. Lets
+    # the bus settle for ≥ PZEM's 100ms inter-command requirement when the
+    # kiln controller's poller has just released the lock.
     BUS_QUIET_WAIT_SEC = 0.15
 
     def __init__(
         self,
         l1_reader,
-        l2_reader,
         state: PowerState,
         interval: float = 5.0,
         bus_lock: threading.Lock | None = None,
     ) -> None:
         self._l1_reader = l1_reader
-        self._l2_reader = l2_reader  # may be None for single-PZEM setups
         self._state = state
         self._interval = interval
         self._bus_lock = bus_lock
@@ -128,66 +102,45 @@ class PowerPoller:
         logger.info("PowerPoller stopped")
 
     def _run(self) -> None:
-        import time as _time  # local alias to keep diff small
-
         while not self._stop_event.is_set():
-            # Read each PZEM independently so one failed reader doesn't blank
-            # both channels — and so the surviving channel's reading isn't lost
-            # to an all-or-nothing exception path.
             l1: PzemReading | None = None
-            l2: PzemReading | None = None
             l1_err: Exception | None = None
-            l2_err: Exception | None = None
 
             # Reconnect must happen INSIDE the bus lock: minimalmodbus caches
             # one serial.Serial per port name across Instruments, so closing
-            # the underlying port to reconnect races with any concurrent
-            # controller read on the same port.
+            # the underlying port races with concurrent controller reads.
             if self._bus_lock is not None:
                 with self._bus_lock:
-                    # Give the bus a brief quiet window — the kiln poller's
-                    # last request may have just finished, and the PZEM needs
-                    # >= 100 ms between commands.
-                    _time.sleep(self.BUS_QUIET_WAIT_SEC)
-                    l1, l1_err = self._safe_read(self._l1_reader, "L1")
-                    if self._l2_reader is not None:
-                        l2, l2_err = self._safe_read(self._l2_reader, "L2")
-                    self._maybe_reconnect(self._l1_reader, l1_err, "L1")
-                    if self._l2_reader is not None:
-                        self._maybe_reconnect(self._l2_reader, l2_err, "L2")
+                    # Bus quiet window — the kiln poller's last request may
+                    # have just finished, and the PZEM needs ≥100ms between
+                    # commands on the bus.
+                    time.sleep(self.BUS_QUIET_WAIT_SEC)
+                    l1, l1_err = self._safe_read(self._l1_reader)
+                    self._maybe_reconnect(self._l1_reader, l1_err)
             else:
-                l1, l1_err = self._safe_read(self._l1_reader, "L1")
-                if self._l2_reader is not None:
-                    l2, l2_err = self._safe_read(self._l2_reader, "L2")
-                self._maybe_reconnect(self._l1_reader, l1_err, "L1")
-                if self._l2_reader is not None:
-                    self._maybe_reconnect(self._l2_reader, l2_err, "L2")
+                l1, l1_err = self._safe_read(self._l1_reader)
+                self._maybe_reconnect(self._l1_reader, l1_err)
 
-            # update() takes None for a failed (or absent) reader; display +
-            # snapshot treat None as "no fresh data" instead of showing
-            # stale values.
-            self._state.update(l1, l2)
-            # When there's no L2 reader, l2_err stays None and last_poll_ok
-            # reflects only L1's outcome.
-            self._state.last_poll_ok = l1_err is None and l2_err is None
+            # update() with None clears stale data; display falls back to
+            # the poll-age view instead of showing yesterday's reading.
+            self._state.update(l1)
+            self._state.last_poll_ok = l1_err is None
 
             self._stop_event.wait(self._interval)
 
     @staticmethod
-    def _maybe_reconnect(reader, err: Exception | None, label: str) -> None:
+    def _maybe_reconnect(reader, err: Exception | None) -> None:
         if err is None or not _needs_reconnect(err) or not hasattr(reader, "reconnect"):
             return
         try:
             reader.reconnect()
         except Exception:
-            logger.exception("PowerPoller %s reconnect failed", label)
+            logger.exception("PowerPoller reconnect failed")
 
     @staticmethod
-    def _safe_read(
-        reader, label: str
-    ) -> tuple["PzemReading | None", "Exception | None"]:
+    def _safe_read(reader) -> tuple["PzemReading | None", "Exception | None"]:
         try:
             return reader.read(), None
         except Exception as e:
-            logger.exception("PowerPoller %s read failed", label)
+            logger.exception("PowerPoller read failed")
             return None, e

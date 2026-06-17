@@ -37,9 +37,7 @@ export function Monitor() {
         const point: PowerDataPoint = {
           time: new Date(status.timestamp).toLocaleTimeString(),
           L1_A: Math.round(status.l1_current! * 10) / 10,
-          L2_A: Math.round(status.l2_current! * 10) / 10,
           L1_W: Math.round(status.l1_power!),
-          L2_W: Math.round(status.l2_power!),
         };
         const updated = [...prev, point];
         return updated.length > maxPoints ? updated.slice(-maxPoints) : updated;
@@ -89,23 +87,19 @@ export function Monitor() {
         </div>
       )}
 
-      {status && status.total_current !== null && (
-        <div className="grid grid-cols-4 gap-4 text-center">
+      {status && status.l1_current !== null && (
+        <div className="grid grid-cols-3 gap-4 text-center">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
-            <div className="text-sm text-gray-500 dark:text-gray-400">L1</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Current</div>
             <div className="text-2xl font-bold text-amber-500 dark:text-amber-400">{status.l1_current?.toFixed(1)}A</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
-            <div className="text-sm text-gray-500 dark:text-gray-400">L2</div>
-            <div className="text-2xl font-bold text-violet-500 dark:text-violet-400">{status.l2_current?.toFixed(1)}A</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
-            <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
-            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{status.total_current?.toFixed(1)}A</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Voltage</div>
+            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{status.l1_voltage?.toFixed(0)}V</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
             <div className="text-sm text-gray-500 dark:text-gray-400">Power</div>
-            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{status.total_power?.toFixed(0)}W</div>
+            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{status.l1_power?.toFixed(0)}W</div>
           </div>
         </div>
       )}

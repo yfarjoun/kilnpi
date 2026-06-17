@@ -85,9 +85,6 @@ class PowerReadingResponse(BaseModel):
     l1_voltage: float
     l1_current: float
     l1_power: float
-    l2_voltage: float
-    l2_current: float
-    l2_power: float
 
     model_config = {"from_attributes": True}
 

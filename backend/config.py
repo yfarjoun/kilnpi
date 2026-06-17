@@ -41,12 +41,9 @@ class Settings:
     slave_address: int = 1
     min_request_interval_ms: int = 300
 
-    # PZEM power meters (addresses on same Modbus bus).
-    # Set pzem_l2_address to an int (e.g., 3) to enable a second PZEM.
-    # None means single-PZEM mode — the one meter measures total current
-    # via voltage across L1-L2 and a CT clamp on one leg (or both).
+    # PZEM-016 power meter (single meter; voltage taps L1-L2, CT on the
+    # mains feed gives total kiln current).
     pzem_l1_address: int = 2
-    pzem_l2_address: int | None = None
     pzem_poll_interval_sec: float = 5.0
 
     # Database

@@ -87,24 +87,17 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     controller = _create_controller()
     state = ControllerState()
 
-    # Power monitoring. L2 is optional — single-PZEM setups (one meter measuring
-    # total current via voltage across L1-L2) leave settings.pzem_l2_address as
-    # None and only create the L1 reader.
+    # Power monitoring. Single PZEM-016 measures total current/voltage/power
+    # for the whole kiln circuit (voltage taps across L1-L2, CT clamp on the
+    # mains feed).
     power_state = PowerState()
-    pzem_l2: object | None
     if settings.mock_mode:
         from backend.modbus.mock_pzem import MockPzemReader
         pzem_l1 = MockPzemReader("L1")
-        pzem_l2 = MockPzemReader("L2") if settings.pzem_l2_address is not None else None
         bus_lock = None
     else:
         from backend.modbus.pzem import PzemReader
         pzem_l1 = PzemReader(settings.serial_port, settings.pzem_l1_address, settings.baud_rate)
-        pzem_l2 = (
-            PzemReader(settings.serial_port, settings.pzem_l2_address, settings.baud_rate)
-            if settings.pzem_l2_address is not None
-            else None
-        )
         bus_lock = controller.bus_lock  # type: ignore[union-attr]
 
     # Wire up API modules
@@ -122,7 +115,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     poller.wait_for_first_poll()
 
     power_poller = PowerPoller(
-        pzem_l1, pzem_l2, power_state,
+        pzem_l1,
+        power_state,
         interval=settings.pzem_poll_interval_sec,
         bus_lock=bus_lock,
     )
@@ -132,8 +126,6 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         while True:
             if settings.mock_mode and hasattr(pzem_l1, "set_mv"):
                 pzem_l1.set_mv(state.mv)  # type: ignore[attr-defined]
-                if pzem_l2 is not None and hasattr(pzem_l2, "set_mv"):
-                    pzem_l2.set_mv(state.mv)  # type: ignore[attr-defined]
             await asyncio.sleep(1)
 
     mock_pzem_task = asyncio.create_task(_update_mock_pzem_mv())

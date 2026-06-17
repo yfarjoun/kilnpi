@@ -411,18 +411,11 @@ class DisplayService:
         usb_status = get_usb_gadget_status()
         usb_indicator = " U+" if usb_status != "off" else ""
 
-        # Line 3: combined current/voltage/power if any PZEM has a fresh
-        # reading, otherwise poll age. Single-PZEM setups (total current via
-        # one meter) read the same field as multi-PZEM, the totals just sum
-        # to the one channel's value.
+        # Line 3: current/voltage/power if the PZEM has a fresh reading,
+        # otherwise fall back to poll age.
         l1 = self._power_state.l1 if self._power_state else None
-        l2 = self._power_state.l2 if self._power_state else None
-        if l1 is not None or l2 is not None:
-            total_a = (l1.current if l1 else 0.0) + (l2.current if l2 else 0.0)
-            total_w = (l1.power if l1 else 0.0) + (l2.power if l2 else 0.0)
-            voltage_src = l1 if l1 is not None else l2
-            assert voltage_src is not None
-            poll_str = f"{total_a:.1f}A  {voltage_src.voltage:.0f}V  {total_w:.0f}W"
+        if l1 is not None:
+            poll_str = f"{l1.current:.1f}A  {l1.voltage:.0f}V  {l1.power:.0f}W"
         elif poll_age < 0:
             poll_str = "Poll: --"
         else:
@@ -484,21 +477,14 @@ class DisplayService:
     def _program_detail(self) -> list[str]:
         """Expanded program/power info."""
         if self._state.run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
-            # Show power info when idle. With a single PZEM measuring total
-            # current, sums collapse to one channel's value; the same code
-            # path works if a second PZEM is added later.
+            # Show power info when idle.
             l1 = self._power_state.l1 if self._power_state else None
-            l2 = self._power_state.l2 if self._power_state else None
-            if l1 is not None or l2 is not None:
-                total_a = (l1.current if l1 else 0.0) + (l2.current if l2 else 0.0)
-                total_w = (l1.power if l1 else 0.0) + (l2.power if l2 else 0.0)
-                voltage_src = l1 if l1 is not None else l2
-                assert voltage_src is not None  # at least one is non-None
+            if l1 is not None:
                 return [
-                    f"Current: {total_a:.1f} A",
-                    f"Voltage: {voltage_src.voltage:.0f} V",
-                    f"Power: {total_w:.0f} W",
-                    f"PF: {voltage_src.power_factor:.2f}",
+                    f"Current: {l1.current:.1f} A",
+                    f"Voltage: {l1.voltage:.0f} V",
+                    f"Power: {l1.power:.0f} W",
+                    f"PF: {l1.power_factor:.2f}",
                 ]
             return ["Prog: --", "No program", "running", ""]
 
@@ -511,12 +497,10 @@ class DisplayService:
         elapsed = self._state.segment_elapsed_min
         run_status = "PAUSED" if self._state.run_mode == RunMode.STANDBY else ""
 
-        # Show total current on line 4 when at least one PZEM has data.
+        # Show current on line 4 when the PZEM has data.
         l1 = self._power_state.l1 if self._power_state else None
-        l2 = self._power_state.l2 if self._power_state else None
-        if l1 is not None or l2 is not None:
-            total_a = (l1.current if l1 else 0.0) + (l2.current if l2 else 0.0)
-            line4 = f"{total_a:.1f}A {elapsed}min"
+        if l1 is not None:
+            line4 = f"{l1.current:.1f}A {elapsed}min"
         else:
             line4 = f"Elapsed: {elapsed} min"
 

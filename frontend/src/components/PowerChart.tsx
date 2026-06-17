@@ -12,9 +12,7 @@ import {
 export interface PowerDataPoint {
   time: string;
   L1_A: number;
-  L2_A: number;
   L1_W: number;
-  L2_W: number;
 }
 
 interface PowerChartProps {
@@ -44,17 +42,11 @@ export function PowerChart({ data, height = 250, showPower = true }: PowerChartP
           labelStyle={{ color: 'var(--chart-text)' }}
         />
         <Legend />
-        <Line yAxisId="amps" type="monotone" dataKey="L1_A" name="L1 Current"
+        <Line yAxisId="amps" type="monotone" dataKey="L1_A" name="Current"
           stroke="#F59E0B" dot={false} strokeWidth={2} />
-        <Line yAxisId="amps" type="monotone" dataKey="L2_A" name="L2 Current"
-          stroke="#8B5CF6" dot={false} strokeWidth={2} />
         {showPower && (
-          <>
-            <Line yAxisId="watts" type="monotone" dataKey="L1_W" name="L1 Power"
-              stroke="#F59E0B" dot={false} strokeWidth={1} strokeDasharray="5 5" />
-            <Line yAxisId="watts" type="monotone" dataKey="L2_W" name="L2 Power"
-              stroke="#8B5CF6" dot={false} strokeWidth={1} strokeDasharray="5 5" />
-          </>
+          <Line yAxisId="watts" type="monotone" dataKey="L1_W" name="Power"
+            stroke="#F59E0B" dot={false} strokeWidth={1} strokeDasharray="5 5" />
         )}
       </LineChart>
     </ResponsiveContainer>

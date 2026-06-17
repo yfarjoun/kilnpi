@@ -135,8 +135,5 @@ class Recorder:
             l1_voltage=snap["l1_voltage"],
             l1_current=snap["l1_current"],
             l1_power=snap["l1_power"],
-            l2_voltage=snap["l2_voltage"],
-            l2_current=snap["l2_current"],
-            l2_power=snap["l2_power"],
         )
         session.add(pr)

@@ -24,15 +24,10 @@ export interface Status {
   timestamp: string;
   active_program_name: string | null;
   program_target_temp: number | null;
-  // Power monitoring (from PZEM-016)
+  // Power monitoring (from a single PZEM-016 reading total kiln load)
   l1_voltage: number | null;
   l1_current: number | null;
   l1_power: number | null;
-  l2_voltage: number | null;
-  l2_current: number | null;
-  l2_power: number | null;
-  total_current: number | null;
-  total_power: number | null;
 }
 
 export interface Program {
@@ -73,9 +68,6 @@ export interface PowerReading {
   l1_voltage: number;
   l1_current: number;
   l1_power: number;
-  l2_voltage: number;
-  l2_current: number;
-  l2_power: number;
 }
 
 export interface FiringDetail {
