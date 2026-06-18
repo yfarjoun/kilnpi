@@ -30,24 +30,47 @@ export function Dashboard() {
     api.listPrograms().then(setPrograms).catch((err) => console.error('Failed to load programs:', err));
   }, [loadSlots]);
 
+  // Optimistic SP: writing to the controller, having the poller read it
+  // back, and the websocket broadcasting takes ~2-4 seconds. Until then,
+  // status.sp still shows the old value, which made it look like nothing
+  // happened after pressing "Set" (causing users to press it again).
+  // Show the freshly-set value immediately and let it stick until the
+  // real status catches up.
+  const [optimisticSP, setOptimisticSP] = useState<number | null>(null);
+
   const handleSetSP = async () => {
     const value = parseFloat(spInput);
     if (!isNaN(value)) {
-      await api.setSetpoint(value);
+      setOptimisticSP(value);
       setEditing(false);
       setSpInput('');
+      try {
+        await api.setSetpoint(value);
+      } catch (err) {
+        setOptimisticSP(null); // revert on failure
+        throw err;
+      }
     }
   };
 
+  // Drop the optimistic override once the real SP is close enough.
+  useEffect(() => {
+    if (
+      optimisticSP !== null &&
+      status &&
+      Math.abs(status.sp - optimisticSP) < 0.5
+    ) {
+      setOptimisticSP(null);
+    }
+  }, [status?.sp, optimisticSP]);
+
   // Stable click handler — the inline arrow used to be rebound on every
-  // websocket re-render (every 2s), which occasionally swallowed the
-  // first click.
+  // websocket re-render (every 2s), which could swallow clicks.
   const startEditingSP = useCallback(() => {
     setEditing(true);
   }, []);
 
-  // Initialize the input value when entering edit mode, without coupling
-  // it to the (frequently-rebound) click handler.
+  // Initialize the input value when entering edit mode.
   useEffect(() => {
     if (editing) {
       setSpInput((prev) => prev || (status?.sp.toString() ?? ''));
@@ -118,7 +141,7 @@ export function Dashboard() {
         {/* SP Display + Edit */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <TempGauge
-            value={isRunning && status.program_target_temp != null ? status.program_target_temp : status.sp}
+            value={isRunning && status.program_target_temp != null ? status.program_target_temp : (optimisticSP ?? status.sp)}
             label={isRunning && status.program_target_temp != null ? "Target" : "Setpoint"}
           />
           <div className="mt-4 flex justify-center">
