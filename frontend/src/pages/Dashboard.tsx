@@ -30,39 +30,38 @@ export function Dashboard() {
     api.listPrograms().then(setPrograms).catch((err) => console.error('Failed to load programs:', err));
   }, [loadSlots]);
 
-  // Optimistic SP: writing to the controller, having the poller read it
-  // back, and the websocket broadcasting takes ~2-4 seconds. Until then,
-  // status.sp still shows the old value, which made it look like nothing
-  // happened after pressing "Set" (causing users to press it again).
-  // Show the freshly-set value immediately and let it stick until the
-  // real status catches up.
-  const [optimisticSP, setOptimisticSP] = useState<number | null>(null);
+  // Track the SP we just wrote so we can dim the gauge as a "writing,
+  // wait for the controller to acknowledge" cue. The displayed number
+  // remains the real status.sp — we don't show speculative values, just
+  // signal that it's stale. Cleared once status.sp matches what we wrote.
+  const [pendingSP, setPendingSP] = useState<number | null>(null);
+  const spIsPending = pendingSP !== null && status != null && Math.abs(status.sp - pendingSP) >= 0.5;
 
   const handleSetSP = async () => {
     const value = parseFloat(spInput);
     if (!isNaN(value)) {
-      setOptimisticSP(value);
+      setPendingSP(value);
       setEditing(false);
       setSpInput('');
       try {
         await api.setSetpoint(value);
       } catch (err) {
-        setOptimisticSP(null); // revert on failure
+        setPendingSP(null); // revert pending indicator on failure
         throw err;
       }
     }
   };
 
-  // Drop the optimistic override once the real SP is close enough.
+  // Once real SP catches up, drop the pending marker.
   useEffect(() => {
     if (
-      optimisticSP !== null &&
+      pendingSP !== null &&
       status &&
-      Math.abs(status.sp - optimisticSP) < 0.5
+      Math.abs(status.sp - pendingSP) < 0.5
     ) {
-      setOptimisticSP(null);
+      setPendingSP(null);
     }
-  }, [status?.sp, optimisticSP]);
+  }, [status?.sp, pendingSP]);
 
   // Stable click handler — the inline arrow used to be rebound on every
   // websocket re-render (every 2s), which could swallow clicks.
@@ -141,8 +140,9 @@ export function Dashboard() {
         {/* SP Display + Edit */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <TempGauge
-            value={isRunning && status.program_target_temp != null ? status.program_target_temp : (optimisticSP ?? status.sp)}
+            value={isRunning && status.program_target_temp != null ? status.program_target_temp : status.sp}
             label={isRunning && status.program_target_temp != null ? "Target" : "Setpoint"}
+            pending={spIsPending}
           />
           <div className="mt-4 flex justify-center">
             {editing ? (
