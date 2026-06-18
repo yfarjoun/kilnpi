@@ -39,6 +39,21 @@ export function Dashboard() {
     }
   };
 
+  // Stable click handler — the inline arrow used to be rebound on every
+  // websocket re-render (every 2s), which occasionally swallowed the
+  // first click.
+  const startEditingSP = useCallback(() => {
+    setEditing(true);
+  }, []);
+
+  // Initialize the input value when entering edit mode, without coupling
+  // it to the (frequently-rebound) click handler.
+  useEffect(() => {
+    if (editing) {
+      setSpInput((prev) => prev || (status?.sp.toString() ?? ''));
+    }
+  }, [editing, status?.sp]);
+
   const handleFire = async (slot: string) => {
     setLoading(true);
     setOptimisticRunning(true);
@@ -133,7 +148,7 @@ export function Dashboard() {
               </div>
             ) : !isRunning ? (
               <button
-                onClick={() => { setSpInput(status.sp.toString()); setEditing(true); }}
+                onClick={startEditingSP}
                 className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm text-gray-700 dark:text-white"
               >
                 Edit SP
