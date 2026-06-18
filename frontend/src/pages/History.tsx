@@ -21,13 +21,22 @@ export function History() {
   }, []);
 
   const viewFiring = async (id: number) => {
-    const [detail, firingStats] = await Promise.all([
-      api.getFiring(id),
-      api.getFiringStats(id),
-    ]);
-    setSelected(detail);
-    setStats(firingStats);
-    setNotes(detail.firing.notes || '');
+    try {
+      const [detail, firingStats] = await Promise.all([
+        api.getFiring(id),
+        api.getFiringStats(id),
+      ]);
+      setSelected(detail);
+      setStats(firingStats);
+      setNotes(detail.firing.notes || '');
+    } catch (err) {
+      console.error('Failed to open firing #' + id + ':', err);
+      // Surface the error to the user instead of silently swallowing it
+      alert(
+        'Could not open firing #' + id + ':\n' +
+          (err instanceof Error ? err.message : String(err))
+      );
+    }
   };
 
   const handleBack = () => {

@@ -22,7 +22,7 @@ export function TempGauge({
     <div className="text-center">
       <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</div>
       <div className={`text-5xl font-bold ${valueClass} tabular-nums`}>
-        {value.toFixed(1)}
+        {Math.round(value)}
         <span className="text-2xl text-gray-400">{unit}</span>
       </div>
     </div>

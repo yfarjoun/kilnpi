@@ -185,7 +185,7 @@ export function Dashboard() {
           <div className="text-center">
             <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Output</div>
             <div className="text-5xl font-bold text-amber-500 dark:text-amber-400 tabular-nums">
-              {status.mv.toFixed(1)}
+              {Math.round(status.mv)}
               <span className="text-2xl text-gray-400">%</span>
             </div>
             <div className="mt-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">

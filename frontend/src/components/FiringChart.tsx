@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   LineChart,
   Line,
@@ -19,6 +20,8 @@ interface FiringChartProps {
 }
 
 export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringChartProps) {
+  // Persist brush range across renders so live data updates don't reset zoom.
+  const [brushRange, setBrushRange] = useState<{ startIndex?: number; endIndex?: number }>({});
   const data = readings.map((r, i) => ({
     index: i,
     time: new Date(r.timestamp).toLocaleTimeString(),
@@ -57,10 +60,20 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
           labelStyle={{ color: 'var(--chart-text)' }}
         />
         <Legend />
-        <Line yAxisId="temp" type="basis" dataKey="PV" stroke="#EF4444" dot={false} strokeWidth={2} />
-        <Line yAxisId="temp" type="basis" dataKey="SP" stroke="#3B82F6" dot={false} strokeWidth={2} strokeDasharray="5 5" />
-        <Line yAxisId="pct" type="basis" dataKey="MV" stroke="#10B981" dot={false} strokeWidth={1} />
-        <Brush dataKey="time" height={40} stroke="var(--chart-text)" travellerWidth={24} />
+        <Line yAxisId="temp" type="basis" dataKey="PV" stroke="#EF4444" dot={false} strokeWidth={2} isAnimationActive={false} />
+        <Line yAxisId="temp" type="basis" dataKey="SP" stroke="#3B82F6" dot={false} strokeWidth={2} strokeDasharray="5 5" isAnimationActive={false} />
+        <Line yAxisId="pct" type="basis" dataKey="MV" stroke="#10B981" dot={false} strokeWidth={1} isAnimationActive={false} />
+        <Brush
+          dataKey="time"
+          height={40}
+          stroke="var(--chart-text)"
+          travellerWidth={24}
+          startIndex={brushRange.startIndex}
+          endIndex={brushRange.endIndex}
+          onChange={(range: { startIndex?: number; endIndex?: number }) =>
+            setBrushRange({ startIndex: range.startIndex, endIndex: range.endIndex })
+          }
+        />
         {cutoffIndex !== null && (
           <ReferenceLine
             yAxisId="temp"

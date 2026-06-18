@@ -29,6 +29,11 @@ class ControllerState:
     last_poll_ok: bool = False
     active_program_id: int | None = None
     active_program_name: str | None = None
+    # Target temp of the segment the controller is currently in (i.e., C_n
+    # where n = (PRO+1)//2). The poller refreshes this on each PRO change.
+    # Snapshot uses this as program_target_temp regardless of how the firing
+    # was started, with no slot assumption.
+    current_segment_target_temp: float | None = None
     _active_segments: list[dict] | None = field(default=None, repr=False)
     _pro_offset: int = field(default=1, repr=False)
     _run_started_at: datetime | None = field(default=None, repr=False)
@@ -76,31 +81,10 @@ class ControllerState:
                 delta = datetime.now(UTC) - self._run_started_at
                 total_elapsed = int(delta.total_seconds() / 60)
 
-            # Interpolate the current ramp/soak target from stored program.
-            # Each register segment = 2 PRO values: odd=ramp, even=soak.
-            program_target_temp: float | None = None
-            if self._active_segments and self.segment >= self._pro_offset:
-                relative = self.segment - self._pro_offset
-                idx = relative // 2  # program segment index
-                is_ramp = relative % 2 == 0  # odd PRO = ramp, even = soak
-                if 0 <= idx < len(self._active_segments):
-                    seg = self._active_segments[idx]
-                    target = seg["target_temp"]
-                    if is_ramp:
-                        ramp_min = seg["ramp_min"]
-                        if idx > 0:
-                            prev_temp = self._active_segments[idx - 1]["target_temp"]
-                        else:
-                            prev_temp = 0.0
-                        elapsed = self.segment_elapsed_min
-                        if ramp_min > 0 and elapsed < ramp_min:
-                            frac = elapsed / ramp_min
-                            program_target_temp = prev_temp + (target - prev_temp) * frac
-                        else:
-                            program_target_temp = target
-                    else:
-                        # Soak phase: hold at target
-                        program_target_temp = target
+            # Dynamic target the controller is heading toward in the current
+            # segment. Read live from the controller by the poller
+            # (current_segment_target_temp); no slot assumption.
+            program_target_temp: float | None = self.current_segment_target_temp
 
             # User-facing segment number (1-based) from PRO value
             program_segment: int | None = None
@@ -140,10 +124,9 @@ class Poller:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._first_poll_done = threading.Event()
-        # Track whether we've already attempted to recover program segments
-        # from the controller this firing — avoids re-reading every poll if
-        # the program area happens to be empty.
-        self._tried_segment_recovery = False
+        # Cache last-known PRO so we only re-read the segment target register
+        # when the PRO advances to a new segment.
+        self._last_seg_for_target: int | None = None
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -176,12 +159,12 @@ class Poller:
                 self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm1, alarm2)
                 self._state.last_poll_ok = True
 
-                # If the controller is running a program but we don't have
-                # its segments cached (e.g., firing started via the
-                # controller's physical buttons rather than the web UI),
-                # read them from the controller so program_target_temp
-                # interpolation works. One-shot per firing.
-                self._maybe_recover_program_segments(run_mode)
+                # Read the current segment's target temperature directly
+                # from the controller (no slot assumption — works whether
+                # the user fired via web UI, physical buttons, or anything
+                # else). Stored on state for the snapshot to expose as
+                # program_target_temp.
+                self._refresh_segment_target(run_mode, segment)
             except Exception as exc:
                 self._state.last_poll_ok = False
                 logger.exception("Polling error")
@@ -206,44 +189,26 @@ class Poller:
 
             self._stop_event.wait(self._interval)
 
-    def _maybe_recover_program_segments(self, run_mode: RunMode) -> None:
-        """If the controller is running a program but we have no segment
-        data cached, read it from the controller. Handles firings started
-        from the controller's physical buttons or any other path that
-        bypasses the web UI's slot-fire endpoint.
+    def _refresh_segment_target(self, run_mode: RunMode, pro: int) -> None:
+        """Read the current segment's target temp (C_n) from the controller
+        whenever PRO advances to a new segment. PRO encodes ramp+soak as
+        two consecutive steps per segment, so segment_n = (PRO + 1) // 2.
+        Stored on state so snapshot() can surface it as program_target_temp
+        without depending on any slot assumption or program-list cache.
         """
-        # When the kiln returns to OFF, reset so a future manual firing
-        # gets another recovery attempt.
-        if run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
-            if self._tried_segment_recovery and self._state._active_segments is not None:
-                # Don't clear segments mid-firing unless run actually stops.
-                pass
-            self._tried_segment_recovery = False
+        if run_mode not in (RunMode.RUNNING, RunMode.STANDBY) or pro <= 0:
+            self._last_seg_for_target = None
+            self._state.current_segment_target_temp = None
             return
 
-        if self._state._active_segments is not None or self._tried_segment_recovery:
-            return
+        seg_n = (pro + 1) // 2
+        if seg_n == self._last_seg_for_target:
+            return  # cached value still valid
 
-        self._tried_segment_recovery = True
         try:
-            segments = self._controller.read_program()
+            target = self._controller.read_segment_target_temp(seg_n)
         except Exception:
-            logger.exception("Auto-recover: failed to read program from controller")
+            logger.exception("Failed to read segment %d target temp", seg_n)
             return
-        if not segments:
-            logger.warning("Auto-recover: controller has no program segments stored")
-            return
-
-        # Use model_dump for Pydantic models; assume list[Segment].
-        self._state._active_segments = [s.model_dump() for s in segments]
-        # No way to know which slot was used from the physical fire — assume
-        # the program is at the start of the segment array (PRO offset = 1).
-        # If the slot-B program is the running one, target interpolation may
-        # be off until the user re-fires via the web UI.
-        self._state._pro_offset = 1
-        if self._state.active_program_name is None:
-            self._state.active_program_name = "(manual)"
-        logger.info(
-            "Auto-recovered %d program segments from controller (assumed slot-A offset)",
-            len(segments),
-        )
+        self._state.current_segment_target_temp = target
+        self._last_seg_for_target = seg_n

@@ -146,7 +146,7 @@ export function Monitor() {
       )}
 
       {status && (
-        <div className="grid grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-3 gap-4 text-center">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
             <div className="text-sm text-gray-500 dark:text-gray-400">PV</div>
             <div className="text-2xl font-bold text-red-500 dark:text-red-400">{status.pv.toFixed(1)}&deg;C</div>

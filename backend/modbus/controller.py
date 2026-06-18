@@ -74,6 +74,10 @@ class ControllerInterface(Protocol):
         """Read alarm status as (alarm1, alarm2)."""
         ...
 
+    def read_segment_target_temp(self, seg_n: int) -> float:
+        """Read the target temperature (C_n register) for segment N (1-based)."""
+        ...
+
     def write_start_segment(self, segment: int) -> None:
         """Write the starting segment number (Pro register)."""
         ...

@@ -157,6 +157,13 @@ class MockController:
     def read_alarm(self) -> tuple[bool, bool]:
         return (self._alarm1, self._alarm2)
 
+    def read_segment_target_temp(self, seg_n: int) -> float:
+        """Mock: return the program's segment target if known, else 0."""
+        try:
+            return float(self._program[seg_n - 1].target_temp)
+        except (IndexError, AttributeError):
+            return 0.0
+
     def start_autotune(self) -> None:
         self._autotuning = True
 
