@@ -44,13 +44,13 @@ export function PowerChart({ data, height = 250, showPower = true }: PowerChartP
           labelStyle={{ color: 'var(--chart-text)' }}
         />
         <Legend />
-        <Line yAxisId="amps" type="monotone" dataKey="L1_A" name="Current"
+        <Line yAxisId="amps" type="basis" dataKey="L1_A" name="Current"
           stroke="#F59E0B" dot={false} strokeWidth={2} />
         {showPower && (
-          <Line yAxisId="watts" type="monotone" dataKey="L1_W" name="Power"
+          <Line yAxisId="watts" type="basis" dataKey="L1_W" name="Power"
             stroke="#F59E0B" dot={false} strokeWidth={1} strokeDasharray="5 5" />
         )}
-        <Brush dataKey="time" height={24} stroke="var(--chart-text)" travellerWidth={8} />
+        <Brush dataKey="time" height={40} stroke="var(--chart-text)" travellerWidth={24} />
       </LineChart>
     </ResponsiveContainer>
   );

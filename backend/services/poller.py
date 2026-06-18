@@ -140,6 +140,10 @@ class Poller:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._first_poll_done = threading.Event()
+        # Track whether we've already attempted to recover program segments
+        # from the controller this firing — avoids re-reading every poll if
+        # the program area happens to be empty.
+        self._tried_segment_recovery = False
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -171,6 +175,13 @@ class Poller:
 
                 self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm1, alarm2)
                 self._state.last_poll_ok = True
+
+                # If the controller is running a program but we don't have
+                # its segments cached (e.g., firing started via the
+                # controller's physical buttons rather than the web UI),
+                # read them from the controller so program_target_temp
+                # interpolation works. One-shot per firing.
+                self._maybe_recover_program_segments(run_mode)
             except Exception as exc:
                 self._state.last_poll_ok = False
                 logger.exception("Polling error")
@@ -194,3 +205,45 @@ class Poller:
                 self._first_poll_done.set()
 
             self._stop_event.wait(self._interval)
+
+    def _maybe_recover_program_segments(self, run_mode: RunMode) -> None:
+        """If the controller is running a program but we have no segment
+        data cached, read it from the controller. Handles firings started
+        from the controller's physical buttons or any other path that
+        bypasses the web UI's slot-fire endpoint.
+        """
+        # When the kiln returns to OFF, reset so a future manual firing
+        # gets another recovery attempt.
+        if run_mode not in (RunMode.RUNNING, RunMode.STANDBY):
+            if self._tried_segment_recovery and self._state._active_segments is not None:
+                # Don't clear segments mid-firing unless run actually stops.
+                pass
+            self._tried_segment_recovery = False
+            return
+
+        if self._state._active_segments is not None or self._tried_segment_recovery:
+            return
+
+        self._tried_segment_recovery = True
+        try:
+            segments = self._controller.read_program()
+        except Exception:
+            logger.exception("Auto-recover: failed to read program from controller")
+            return
+        if not segments:
+            logger.warning("Auto-recover: controller has no program segments stored")
+            return
+
+        # Use model_dump for Pydantic models; assume list[Segment].
+        self._state._active_segments = [s.model_dump() for s in segments]
+        # No way to know which slot was used from the physical fire — assume
+        # the program is at the start of the segment array (PRO offset = 1).
+        # If the slot-B program is the running one, target interpolation may
+        # be off until the user re-fires via the web UI.
+        self._state._pro_offset = 1
+        if self._state.active_program_name is None:
+            self._state.active_program_name = "(manual)"
+        logger.info(
+            "Auto-recovered %d program segments from controller (assumed slot-A offset)",
+            len(segments),
+        )

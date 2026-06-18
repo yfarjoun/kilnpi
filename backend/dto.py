@@ -76,6 +76,7 @@ class ReadingResponse(BaseModel):
     sp: float
     mv: float
     segment: int | None
+    program_target_temp: float | None = None
 
     model_config = {"from_attributes": True}
 

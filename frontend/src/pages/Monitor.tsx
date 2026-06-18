@@ -159,10 +159,6 @@ export function Monitor() {
             <div className="text-sm text-gray-500 dark:text-gray-400">Output</div>
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{status.mv.toFixed(1)}%</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark:shadow-none">
-            <div className="text-sm text-gray-500 dark:text-gray-400">Points</div>
-            <div className="text-2xl font-bold text-gray-600 dark:text-gray-300">{readings.length}</div>
-          </div>
         </div>
       )}
     </div>

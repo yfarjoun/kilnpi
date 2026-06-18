@@ -113,11 +113,13 @@ class Recorder:
                 firing_id=self._current_firing_id,
                 timestamp=now,
                 pv=snapshot["pv"],
-                sp=snapshot["program_target_temp"]
-                if snapshot.get("program_target_temp") is not None
-                else snapshot["sp"],
+                # sp = the controller's static SP register (the "soak target")
+                # program_target_temp = the dynamic ramp-interpolated target
+                # Frontend displays program_target_temp ?? sp.
+                sp=snapshot["sp"],
                 mv=snapshot["mv"],
                 segment=snapshot.get("program_segment") or snapshot["segment"],
+                program_target_temp=snapshot.get("program_target_temp"),
             )
             session.add(reading)
             await self._record_power_reading(session, now)

@@ -20,6 +20,19 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _drop_legacy_power_l2_columns(conn)
+        await _add_program_target_temp_column(conn)
+
+
+async def _add_program_target_temp_column(conn) -> None:
+    """Add readings.program_target_temp if missing — preserves old firing
+    data while letting new readings store the ramp-interpolated target."""
+    rows = (await conn.execute(text("PRAGMA table_info(readings)"))).fetchall()
+    present = {row[1] for row in rows}
+    if "program_target_temp" not in present:
+        logger.info("Migrating: adding readings.program_target_temp column")
+        await conn.execute(
+            text("ALTER TABLE readings ADD COLUMN program_target_temp REAL")
+        )
 
 
 async def _drop_legacy_power_l2_columns(conn) -> None:

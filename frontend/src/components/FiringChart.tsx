@@ -23,7 +23,9 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
     index: i,
     time: new Date(r.timestamp).toLocaleTimeString(),
     PV: Math.round(r.pv),
-    SP: Math.round(r.sp),
+    // Prefer the controller's dynamic ramp target when known; fall back to
+    // the static SP for old readings / non-program firings.
+    SP: Math.round(r.program_target_temp ?? r.sp),
     MV: Math.round(r.mv),
   }));
 
@@ -55,10 +57,10 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
           labelStyle={{ color: 'var(--chart-text)' }}
         />
         <Legend />
-        <Line yAxisId="temp" type="monotone" dataKey="PV" stroke="#EF4444" dot={false} strokeWidth={2} />
-        <Line yAxisId="temp" type="monotone" dataKey="SP" stroke="#3B82F6" dot={false} strokeWidth={2} strokeDasharray="5 5" />
-        <Line yAxisId="pct" type="monotone" dataKey="MV" stroke="#10B981" dot={false} strokeWidth={1} />
-        <Brush dataKey="time" height={24} stroke="var(--chart-text)" travellerWidth={8} />
+        <Line yAxisId="temp" type="basis" dataKey="PV" stroke="#EF4444" dot={false} strokeWidth={2} />
+        <Line yAxisId="temp" type="basis" dataKey="SP" stroke="#3B82F6" dot={false} strokeWidth={2} strokeDasharray="5 5" />
+        <Line yAxisId="pct" type="basis" dataKey="MV" stroke="#10B981" dot={false} strokeWidth={1} />
+        <Brush dataKey="time" height={40} stroke="var(--chart-text)" travellerWidth={24} />
         {cutoffIndex !== null && (
           <ReferenceLine
             yAxisId="temp"

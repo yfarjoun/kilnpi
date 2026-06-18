@@ -75,6 +75,10 @@ class Reading(Base):
     sp: Mapped[float] = mapped_column(nullable=False)
     mv: Mapped[float] = mapped_column(nullable=False)
     segment: Mapped[int | None] = mapped_column(nullable=True)
+    # Dynamic target the controller is interpolating toward during a ramp.
+    # Nullable: old rows and manual firings without _active_segments leave it None.
+    # When None, frontends fall back to displaying `sp`.
+    program_target_temp: Mapped[float | None] = mapped_column(nullable=True)
 
     firing: Mapped[Firing] = relationship(back_populates="readings")
 

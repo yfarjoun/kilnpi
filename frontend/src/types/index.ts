@@ -61,6 +61,7 @@ export interface Reading {
   sp: number;
   mv: number;
   segment: number | null;
+  program_target_temp?: number | null;
 }
 
 export interface PowerReading {
