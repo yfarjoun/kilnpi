@@ -47,8 +47,11 @@ function movingAverage(data: PowerDataPoint[], window: number): PowerDataPoint[]
 }
 
 export function PowerChart({ data, height = 250, showPower = true }: PowerChartProps) {
-  // Pre-smooth the data so the chart lines aren't dominated by PZEM-cycle noise.
-  const smoothed = useMemo(() => movingAverage(data, 5), [data]);
+  // Pre-smooth aggressively: the controller's time-proportional SSR output
+  // makes every individual PZEM read jump between full-on and full-off
+  // depending on where in the 2-second control cycle the sample landed.
+  // A wide window averages the duty cycle into a meaningful "average load".
+  const smoothed = useMemo(() => movingAverage(data, 30), [data]);
   // Persist brush range across renders so new datapoints don't reset the zoom.
   const [brushRange, setBrushRange] = useState<{ startIndex?: number; endIndex?: number }>({});
   return (
