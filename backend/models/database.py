@@ -30,9 +30,7 @@ async def _add_program_target_temp_column(conn) -> None:
     present = {row[1] for row in rows}
     if "program_target_temp" not in present:
         logger.info("Migrating: adding readings.program_target_temp column")
-        await conn.execute(
-            text("ALTER TABLE readings ADD COLUMN program_target_temp REAL")
-        )
+        await conn.execute(text("ALTER TABLE readings ADD COLUMN program_target_temp REAL"))
 
 
 async def _drop_legacy_power_l2_columns(conn) -> None:

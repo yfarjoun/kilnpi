@@ -5,14 +5,14 @@ import random
 from backend.modbus.pzem import PzemReading
 
 # Nominal electrical parameters
-_NOMINAL_VOLTAGE = 110.0   # V (North American single-phase)
+_NOMINAL_VOLTAGE = 110.0  # V (North American single-phase)
 _FULL_POWER_CURRENT = 24.0  # A per leg at 100% MV
-_NOMINAL_FREQUENCY = 60.0   # Hz
-_NOMINAL_PF = 0.98          # power factor when current is flowing
+_NOMINAL_FREQUENCY = 60.0  # Hz
+_NOMINAL_PF = 0.98  # power factor when current is flowing
 
 # Noise levels (1-sigma)
-_CURRENT_NOISE = 0.2   # A
-_VOLTAGE_NOISE = 1.0   # V
+_CURRENT_NOISE = 0.2  # A
+_VOLTAGE_NOISE = 1.0  # V
 _FREQUENCY_NOISE = 0.05  # Hz
 _PF_NOISE = 0.005
 

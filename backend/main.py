@@ -93,10 +93,12 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     power_state = PowerState()
     if settings.mock_mode:
         from backend.modbus.mock_pzem import MockPzemReader
+
         pzem_l1 = MockPzemReader("L1")
         bus_lock = None
     else:
         from backend.modbus.pzem import PzemReader
+
         pzem_l1 = PzemReader(settings.serial_port, settings.pzem_l1_address, settings.baud_rate)
         bus_lock = controller.bus_lock  # type: ignore[union-attr]
 

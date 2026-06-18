@@ -148,9 +148,7 @@ class RealController:
                 self._throttle()
                 soak = int(inst.read_register(registers.segment_soak_addr(i), 0))
                 self._throttle()
-                temp = float(
-                    inst.read_register(registers.segment_temp_addr(i), 1, signed=True)
-                )
+                temp = float(inst.read_register(registers.segment_temp_addr(i), 1, signed=True))
                 segments.append(Segment(ramp_min=ramp, soak_min=soak, target_temp=temp))
             return segments
 
@@ -225,11 +223,13 @@ class RealController:
             raise ValueError(f"segment {seg_n} out of range 1..{registers.MAX_SEGMENTS}")
         inst = self._ensure_open()
         self._throttle()
-        return float(inst.read_register(
-            registers.segment_temp_addr(seg_n),
-            number_of_decimals=1,
-            signed=True,
-        ))
+        return float(
+            inst.read_register(
+                registers.segment_temp_addr(seg_n),
+                number_of_decimals=1,
+                signed=True,
+            )
+        )
 
     def read_alarm(self) -> tuple[bool, bool]:
         with self._lock:

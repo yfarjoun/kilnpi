@@ -33,8 +33,13 @@ def test_pzem_reading_stores_fields() -> None:
 
 def test_pzem_reading_alarm_true() -> None:
     reading = PzemReading(
-        voltage=0.0, current=0.0, power=0.0, energy=0,
-        frequency=0.0, power_factor=0.0, alarm=True,
+        voltage=0.0,
+        current=0.0,
+        power=0.0,
+        energy=0,
+        frequency=0.0,
+        power_factor=0.0,
+        alarm=True,
     )
     assert reading.alarm is True
 
@@ -42,8 +47,13 @@ def test_pzem_reading_alarm_true() -> None:
 def test_pzem_reading_is_frozen() -> None:
     """PzemReading must be immutable (frozen dataclass)."""
     reading = PzemReading(
-        voltage=230.5, current=1.0, power=230.5, energy=100,
-        frequency=50.0, power_factor=1.0, alarm=False,
+        voltage=230.5,
+        current=1.0,
+        power=230.5,
+        energy=100,
+        frequency=50.0,
+        power_factor=1.0,
+        alarm=False,
     )
     with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
         reading.voltage = 999.9  # type: ignore[misc]
@@ -59,16 +69,16 @@ def test_pzem_reading_is_dataclass() -> None:
 
 
 def _make_raw_regs(
-    voltage_raw: int = 2305,   # 230.5 V
-    current_low: int = 3141,   # 3.141 A (low 16)
+    voltage_raw: int = 2305,  # 230.5 V
+    current_low: int = 3141,  # 3.141 A (low 16)
     current_high: int = 0,
-    power_low: int = 7228,     # 722.8 W (low 16)
+    power_low: int = 7228,  # 722.8 W (low 16)
     power_high: int = 0,
-    energy_low: int = 12345,   # 12345 Wh (low 16)
+    energy_low: int = 12345,  # 12345 Wh (low 16)
     energy_high: int = 0,
     frequency_raw: int = 500,  # 50.0 Hz
-    pf_raw: int = 98,          # 0.98
-    alarm_raw: int = 0,        # off
+    pf_raw: int = 98,  # 0.98
+    alarm_raw: int = 0,  # off
 ) -> list[int]:
     return [
         voltage_raw,
@@ -144,9 +154,7 @@ def test_read_parses_energy_with_high_word() -> None:
 
 
 def test_read_parses_frequency() -> None:
-    reader, mock_instr = _make_reader_with_mock_instrument(
-        _make_raw_regs(frequency_raw=500)
-    )
+    reader, mock_instr = _make_reader_with_mock_instrument(_make_raw_regs(frequency_raw=500))
     reading = reader.read()
     assert abs(reading.frequency - 50.0) < 1e-6
 

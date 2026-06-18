@@ -22,13 +22,13 @@ _REG_SLAVE_ADDRESS = 0x0002
 class PzemReading:
     """A single snapshot of PZEM-016 measurements."""
 
-    voltage: float        # V
-    current: float        # A
-    power: float          # W
-    energy: int           # Wh
-    frequency: float      # Hz
-    power_factor: float   # dimensionless (0.00–1.00)
-    alarm: bool           # True if high-power alarm is active
+    voltage: float  # V
+    current: float  # A
+    power: float  # W
+    energy: int  # Wh
+    frequency: float  # Hz
+    power_factor: float  # dimensionless (0.00–1.00)
+    alarm: bool  # True if high-power alarm is active
 
 
 class PzemReader:
@@ -114,13 +114,13 @@ class PzemReader:
             regs = inst.read_registers(_REG_VOLTAGE, _NUM_INPUT_REGS, functioncode=4)
 
         # Parse raw register values according to the PZEM-016 register map.
-        voltage = regs[0] * 0.1                                        # ×0.1 V
-        current = (regs[1] | (regs[2] << 16)) * 0.001                  # low+high ×0.001 A
-        power = (regs[3] | (regs[4] << 16)) * 0.1                      # low+high ×0.1 W
-        energy = regs[5] | (regs[6] << 16)                             # low+high ×1 Wh
-        frequency = regs[7] * 0.1                                       # ×0.1 Hz
-        power_factor = regs[8] * 0.01                                   # ×0.01
-        alarm = regs[9] == 0xFFFF                                       # 0=off, 0xFFFF=on
+        voltage = regs[0] * 0.1  # ×0.1 V
+        current = (regs[1] | (regs[2] << 16)) * 0.001  # low+high ×0.001 A
+        power = (regs[3] | (regs[4] << 16)) * 0.1  # low+high ×0.1 W
+        energy = regs[5] | (regs[6] << 16)  # low+high ×1 Wh
+        frequency = regs[7] * 0.1  # ×0.1 Hz
+        power_factor = regs[8] * 0.01  # ×0.01
+        alarm = regs[9] == 0xFFFF  # 0=off, 0xFFFF=on
 
         return PzemReading(
             voltage=voltage,

@@ -79,31 +79,38 @@ def test_get_usb_gadget_status_returns_string() -> None:
 
 def test_get_usb_gadget_status_off_when_interface_missing() -> None:
     # `ip ... show usb0` returns non-zero when usb0 doesn't exist
-    with patch(
-        "backend.services.display.subprocess.run",
-        return_value=type("R", (), {"returncode": 1, "stdout": ""}),
-    ), patch("backend.services.display.platform.system", return_value="Linux"):
+    with (
+        patch(
+            "backend.services.display.subprocess.run",
+            return_value=type("R", (), {"returncode": 1, "stdout": ""}),
+        ),
+        patch("backend.services.display.platform.system", return_value="Linux"),
+    ):
         assert get_usb_gadget_status() == "off"
 
 
 def test_get_usb_gadget_status_extracts_ip() -> None:
     # Simulates real `ip -4 -o addr show usb0` output
-    fake_stdout = (
-        "3: usb0    inet 169.254.7.1/16 brd 169.254.255.255 scope global usb0\n"
-    )
-    with patch(
-        "backend.services.display.subprocess.run",
-        return_value=type("R", (), {"returncode": 0, "stdout": fake_stdout}),
-    ), patch("backend.services.display.platform.system", return_value="Linux"):
+    fake_stdout = "3: usb0    inet 169.254.7.1/16 brd 169.254.255.255 scope global usb0\n"
+    with (
+        patch(
+            "backend.services.display.subprocess.run",
+            return_value=type("R", (), {"returncode": 0, "stdout": fake_stdout}),
+        ),
+        patch("backend.services.display.platform.system", return_value="Linux"),
+    ):
         assert get_usb_gadget_status() == "169.254.7.1"
 
 
 def test_get_usb_gadget_status_up_without_ip() -> None:
     # Interface exists but has no IPv4 assigned yet
-    with patch(
-        "backend.services.display.subprocess.run",
-        return_value=type("R", (), {"returncode": 0, "stdout": ""}),
-    ), patch("backend.services.display.platform.system", return_value="Linux"):
+    with (
+        patch(
+            "backend.services.display.subprocess.run",
+            return_value=type("R", (), {"returncode": 0, "stdout": ""}),
+        ),
+        patch("backend.services.display.platform.system", return_value="Linux"),
+    ):
         assert get_usb_gadget_status() == "up"
 
 

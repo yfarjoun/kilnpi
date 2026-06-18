@@ -400,10 +400,7 @@ class DisplayService:
         browser = "B+" if browsers > 0 else "B-"
 
         poll_age = get_poll_age_sec(self._state)
-        modbus_fresh = (
-            self._state.last_poll_ok
-            and 0 <= poll_age < MODBUS_STALE_AFTER_SEC
-        )
+        modbus_fresh = self._state.last_poll_ok and 0 <= poll_age < MODBUS_STALE_AFTER_SEC
         modbus = "MB+" if modbus_fresh else "MB-"
 
         # USB indicator only when the gadget interface actually exists,
