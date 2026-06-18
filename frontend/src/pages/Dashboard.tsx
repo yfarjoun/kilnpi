@@ -160,6 +160,30 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* Power tiles (single-PZEM total: voltage across L1-L2, CT on mains) */}
+      {status.l1_current !== null && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none text-center">
+            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Current</div>
+            <div className="text-3xl font-bold text-amber-500 dark:text-amber-400 tabular-nums">
+              {status.l1_current.toFixed(1)}<span className="text-xl text-gray-400 ml-1">A</span>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none text-center">
+            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Voltage</div>
+            <div className="text-3xl font-bold text-gray-700 dark:text-gray-200 tabular-nums">
+              {status.l1_voltage?.toFixed(0)}<span className="text-xl text-gray-400 ml-1">V</span>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm dark:shadow-none text-center">
+            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Power</div>
+            <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+              {((status.l1_power ?? 0) / 1000).toFixed(2)}<span className="text-xl text-gray-400 ml-1">kW</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Slot Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {[slotA, slotB].map((slot, idx) => {

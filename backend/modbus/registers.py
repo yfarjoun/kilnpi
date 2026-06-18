@@ -22,7 +22,7 @@ class Register:
 # --- Read-only status registers ---
 
 PV = Register(0x1001, "PV", "Process value (current temperature)", has_decimal=True)
-MV = Register(0x1101, "MV", "Manipulated output 0-200 = 0-100%")
+MV = Register(0x1101, "MV", "Manipulated output 0-100 % (despite docs claiming 0-200)")
 ALARM_STATUS = Register(0x1200, "Alarm", "Current alarm status")
 
 # --- Controller parameters (R/W) ---

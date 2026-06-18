@@ -110,8 +110,11 @@ class RealController:
 
     def read_mv(self) -> float:
         with self._lock:
-            raw = int(self._read_reg(registers.MV))
-            return raw / 2.0  # 0-200 → 0-100%
+            # MV register returns 0-100 directly (% output). The Thermomart
+            # protocol doc claims "0-200 = 0-100%" but empirical test on this
+            # firmware: PV=197, SP=1000 (full-power demand) → MV_raw=100.
+            # The /2 we used to apply made the browser cap at 50% on full.
+            return float(self._read_reg(registers.MV))
 
     def write_sp(self, value: float) -> None:
         with self._lock:
