@@ -2,8 +2,9 @@
 
 import csv
 import io
+from typing import TypeVar
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,51 @@ from backend.models.database import get_session
 from backend.models.schemas import Firing, PowerReading, Reading
 
 router = APIRouter()
+
+# Default cap on points returned by the firing-detail endpoint. Long firings
+# accumulate thousands of polls (every 2s for hours); sending them all is slow
+# to transfer, slow to render, and lethal on mobile. Bucket-mean downsampling
+# to ~500 points also has the side effect of smoothing the SSR-cycle bipolar
+# noise in MV / current / power — a single average per bucket gives a clean
+# "average load" trace rather than the on/off staircase of raw samples.
+DEFAULT_MAX_POINTS = 500
+
+T = TypeVar("T", ReadingResponse, PowerReadingResponse)
+
+
+def _bucket_mean(items: list[T], target: int) -> list[T]:
+    """Downsample a sorted-by-time list to roughly `target` items via bucket mean.
+
+    Each bucket aggregates ~len(items)/target consecutive items: numeric
+    fields are averaged (Nones skipped), the bucket's middle item provides
+    the timestamp and any non-numeric / discrete fields.
+    """
+    if len(items) <= target or target <= 0:
+        return items
+    bucket_size = len(items) / target
+    out: list[T] = []
+    if isinstance(items[0], ReadingResponse):
+        mean_fields = ("pv", "sp", "mv", "program_target_temp")
+        carry_fields = ("segment",)
+    else:  # PowerReadingResponse
+        mean_fields = ("l1_voltage", "l1_current", "l1_power")
+        carry_fields = ()
+    for i in range(target):
+        start = int(i * bucket_size)
+        end = max(start + 1, int((i + 1) * bucket_size))
+        bucket = items[start:end]
+        if not bucket:
+            continue
+        mid = bucket[len(bucket) // 2]
+        avg: dict[str, float | int | str | None] = {"timestamp": mid.timestamp}
+        for f in mean_fields:
+            vals = [v for v in (getattr(b, f) for b in bucket) if v is not None]
+            avg[f] = sum(vals) / len(vals) if vals else None
+        for f in carry_fields:
+            avg[f] = getattr(mid, f)
+        # mypy/pyright happy: model_validate handles the dict
+        out.append(type(items[0]).model_validate(avg))
+    return out
 
 
 def _firing_to_response(f: Firing) -> FiringResponse:
@@ -41,7 +87,16 @@ async def list_firings(session: AsyncSession = Depends(get_session)) -> list[Fir
 
 @router.get("/firings/{firing_id}", response_model=FiringDetailResponse)
 async def get_firing(
-    firing_id: int, session: AsyncSession = Depends(get_session)
+    firing_id: int,
+    max_points: int = Query(
+        DEFAULT_MAX_POINTS,
+        ge=10,
+        le=10000,
+        description=(
+            "Cap on returned readings (downsample via bucket mean). Set higher for full detail."
+        ),
+    ),
+    session: AsyncSession = Depends(get_session),
 ) -> FiringDetailResponse:
     firing = await session.get(Firing, firing_id)
     if not firing:
@@ -56,6 +111,7 @@ async def get_firing(
             sp=r.sp,
             mv=r.mv,
             segment=r.segment,
+            program_target_temp=r.program_target_temp,
         )
         for r in result.scalars().all()
     ]
@@ -69,8 +125,8 @@ async def get_firing(
     ]
     return FiringDetailResponse(
         firing=_firing_to_response(firing),
-        readings=readings,
-        power_readings=power_readings,
+        readings=_bucket_mean(readings, max_points),
+        power_readings=_bucket_mean(power_readings, max_points),
     )
 
 

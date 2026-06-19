@@ -19,42 +19,27 @@ interface FiringChartProps {
   cutoffTimestamp?: string | null;
 }
 
-// Centered moving average over a 1-D array of numbers.
-function movingAvgArr(values: number[], window: number): number[] {
-  if (window < 2 || values.length === 0) return values;
-  const half = Math.floor(window / 2);
-  return values.map((_, i) => {
-    let sum = 0, n = 0;
-    for (let j = Math.max(0, i - half); j <= Math.min(values.length - 1, i + half); j++) {
-      sum += values[j];
-      n += 1;
-    }
-    return sum / n;
-  });
-}
-
 export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringChartProps) {
   // Persist brush range across renders so live data updates don't reset zoom.
   const [brushRange, setBrushRange] = useState<{ startIndex?: number; endIndex?: number }>({});
 
-  // Smooth only the MV (output) line — it's wildly bipolar because every
-  // poll samples the SSR's bang-bang duty cycle at a random instant.
-  // PV/SP are temperatures: actual smooth signals, leave them alone.
-  const data = useMemo(() => {
-    const smoothedMV = movingAvgArr(
-      readings.map((r) => r.mv),
-      30,
-    );
-    return readings.map((r, i) => ({
-      index: i,
-      time: new Date(r.timestamp).toLocaleTimeString(),
-      PV: Math.round(r.pv),
-      // Prefer the controller's dynamic ramp target when known; fall back to
-      // the static SP for old readings / non-program firings.
-      SP: Math.round(r.program_target_temp ?? r.sp),
-      MV: Math.round(smoothedMV[i]),
-    }));
-  }, [readings]);
+  // No client-side smoothing — the /api/history/firings/{id} endpoint already
+  // bucket-means the readings server-side (default ~500 points), which both
+  // shrinks the payload and smooths the MV bang-bang. Live Monitor data goes
+  // through the same DTO so it also looks reasonable.
+  const data = useMemo(
+    () =>
+      readings.map((r, i) => ({
+        index: i,
+        time: new Date(r.timestamp).toLocaleTimeString(),
+        PV: Math.round(r.pv),
+        // Prefer the controller's dynamic ramp target when known; fall back to
+        // the static SP for old readings / non-program firings.
+        SP: Math.round(r.program_target_temp ?? r.sp),
+        MV: Math.round(r.mv),
+      })),
+    [readings],
+  );
 
   // Find the chart index corresponding to the cutoff timestamp
   let cutoffIndex: number | null = null;

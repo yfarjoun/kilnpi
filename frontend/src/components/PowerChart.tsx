@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
   LineChart,
   Line,
@@ -24,34 +24,11 @@ interface PowerChartProps {
   showPower?: boolean;
 }
 
-// Simple centered moving average over `window` points. Smooths fast PZEM jitter
-// before the chart renders so the lines look like actual averages rather than
-// staircase steps. Returns a new array with smoothed L1_A / L1_W; non-numeric
-// fields are copied through unchanged.
-function movingAverage(data: PowerDataPoint[], window: number): PowerDataPoint[] {
-  if (window < 2 || data.length === 0) return data;
-  const half = Math.floor(window / 2);
-  return data.map((_, i) => {
-    let aSum = 0, wSum = 0, n = 0;
-    for (let j = Math.max(0, i - half); j <= Math.min(data.length - 1, i + half); j++) {
-      aSum += data[j].L1_A;
-      wSum += data[j].L1_W;
-      n += 1;
-    }
-    return {
-      ...data[i],
-      L1_A: aSum / n,
-      L1_W: wSum / n,
-    };
-  });
-}
-
 export function PowerChart({ data, height = 250, showPower = true }: PowerChartProps) {
-  // Pre-smooth aggressively: the controller's time-proportional SSR output
-  // makes every individual PZEM read jump between full-on and full-off
-  // depending on where in the 2-second control cycle the sample landed.
-  // A wide window averages the duty cycle into a meaningful "average load".
-  const smoothed = useMemo(() => movingAverage(data, 30), [data]);
+  // History data arrives pre-smoothed (server-side bucket mean to ~500 pts).
+  // Live Monitor data passes through unchanged — the SSR bang-bang shows up
+  // as a wide envelope but each point is genuine.
+  const smoothed = data;
   // Persist brush range across renders so new datapoints don't reset the zoom.
   const [brushRange, setBrushRange] = useState<{ startIndex?: number; endIndex?: number }>({});
   return (

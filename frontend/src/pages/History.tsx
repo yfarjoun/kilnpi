@@ -11,6 +11,7 @@ export function History() {
   const [stats, setStats] = useState<FiringStats | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
+  const [openingFiring, setOpeningFiring] = useState<number | null>(null);
 
   const loadFirings = () => {
     api.listFirings().then(setFirings).finally(() => setLoading(false));
@@ -21,6 +22,7 @@ export function History() {
   }, []);
 
   const viewFiring = async (id: number) => {
+    setOpeningFiring(id);
     try {
       const [detail, firingStats] = await Promise.all([
         api.getFiring(id),
@@ -31,11 +33,12 @@ export function History() {
       setNotes(detail.firing.notes || '');
     } catch (err) {
       console.error('Failed to open firing #' + id + ':', err);
-      // Surface the error to the user instead of silently swallowing it
       alert(
         'Could not open firing #' + id + ':\n' +
           (err instanceof Error ? err.message : String(err))
       );
+    } finally {
+      setOpeningFiring(null);
     }
   };
 
@@ -182,12 +185,23 @@ export function History() {
           {firings.map((f) => (
             <div
               key={f.id}
-              onClick={() => viewFiring(f.id)}
-              className="bg-white dark:bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 flex items-center justify-between shadow-sm dark:shadow-none"
+              onClick={() => openingFiring === null && viewFiring(f.id)}
+              className={`bg-white dark:bg-gray-800 rounded-lg p-4 flex items-center justify-between shadow-sm dark:shadow-none ${
+                openingFiring === f.id
+                  ? 'opacity-60 cursor-wait'
+                  : openingFiring !== null
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750'
+              }`}
             >
               <div className="min-w-0 flex-1">
                 <div className="font-medium">
                   {f.program_name || `Firing #${f.id}`}
+                  {openingFiring === f.id && (
+                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                      loading…
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">
                   {new Date(f.started_at).toLocaleString()}
