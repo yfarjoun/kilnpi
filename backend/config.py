@@ -33,6 +33,13 @@ def _is_mock_mode() -> bool:
     return platform.system() == "Darwin"
 
 
+def _is_headless() -> bool:
+    # Headless: skip OLED and GPIO buttons even on Linux. Used by the parallel
+    # staging unit on the Pi so it doesn't fight the production service over
+    # the shared SPI display and GPIO button pins.
+    return os.environ.get("KILN_HEADLESS", "").strip() in ("1", "true", "yes")
+
+
 @dataclass
 class Settings:
     # Modbus
@@ -59,6 +66,7 @@ class Settings:
 
     # Mode
     mock_mode: bool = field(default_factory=_is_mock_mode)
+    headless_mode: bool = field(default_factory=_is_headless)
 
     # Server
     host: str = "0.0.0.0"

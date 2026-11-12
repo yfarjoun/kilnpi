@@ -16,8 +16,13 @@ from backend.modbus.controller import ControllerInterface
 from backend.modbus.mock_controller import MockController
 from backend.models.database import async_session, init_db
 from backend.models.schemas import Firing
-from backend.services.buttons import ButtonState, create_button_service
-from backend.services.display import DisplayService, create_display_and_splash
+from backend.services.buttons import ButtonState, MockButtonService, create_button_service
+from backend.services.display import (
+    DisplayService,
+    MockDisplay,
+    OledDisplay,
+    create_display_and_splash,
+)
 from backend.services.poller import ControllerState, Poller
 from backend.services.power_poller import PowerPoller, PowerState
 from backend.services.recorder import Recorder
@@ -78,10 +83,18 @@ async def _restore_program_state(state: ControllerState) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
-    # Signal the splash service to stop — we're taking over the display
-    Path("/tmp/kilnpi-ready").touch()
-
-    oled = create_display_and_splash()
+    # Headless: skip OLED + GPIO buttons. Used by the parallel staging unit on
+    # the Pi so it doesn't fight the production service over the SH1106 SPI bus
+    # or the HAT button GPIOs, and doesn't pre-empt the production splash by
+    # touching the ready sentinel.
+    oled: MockDisplay | OledDisplay
+    if not settings.headless_mode:
+        # Signal the splash service to stop — we're taking over the display
+        Path("/tmp/kilnpi-ready").touch()
+        oled = create_display_and_splash()
+    else:
+        oled = MockDisplay()
+        logger.info("Headless mode: OLED disabled (using MockDisplay)")
     await init_db()
 
     controller = _create_controller()
@@ -141,7 +154,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     recorder_task = asyncio.create_task(recorder.run())
 
     button_state = ButtonState()
-    buttons = create_button_service(button_state)
+    buttons = (
+        MockButtonService(button_state)
+        if settings.headless_mode
+        else create_button_service(button_state)
+    )
     buttons.start()
 
     display = DisplayService(

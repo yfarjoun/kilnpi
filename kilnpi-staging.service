@@ -1,0 +1,16 @@
+[Unit]
+Description=KilnPi Controller (staging)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/uv run uvicorn backend.main:app --host 0.0.0.0 --port 8001
+WorkingDirectory=%h/kilnpi-staging
+Environment=MOCK_CONTROLLER=1
+Environment=KILN_HEADLESS=1
+Environment=DB_PATH=%h/kilnpi-staging/data/kiln-staging.db
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
