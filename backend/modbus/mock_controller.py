@@ -164,6 +164,13 @@ class MockController:
         except (IndexError, AttributeError):
             return 0.0
 
+    def read_segment_ramp_min(self, seg_n: int) -> int:
+        """Mock: return the program's segment ramp_min if known, else 0."""
+        try:
+            return int(self._program[seg_n - 1].ramp_min)
+        except (IndexError, AttributeError):
+            return 0
+
     def start_autotune(self) -> None:
         self._autotuning = True
 

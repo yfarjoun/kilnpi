@@ -77,6 +77,11 @@ class Recorder:
 
     async def _start_firing(self, snapshot: dict) -> None:
         now = datetime.now(UTC).isoformat()
+        # program_name stays None for firings without Pi-side program context
+        # (physical buttons, manual sp writes, server crash before the HTTP
+        # caller's name reached state). The display label is a frontend
+        # concern — storing a placeholder here would leak into /api/stats
+        # aggregation and the OLED state after a mid-firing restart.
         async with async_session() as session:
             firing = Firing(
                 started_at=now,
@@ -88,7 +93,11 @@ class Recorder:
             await session.commit()
             await session.refresh(firing)
             self._current_firing_id = firing.id
-        logger.info("Started recording firing #%d", self._current_firing_id)
+        logger.info(
+            "Started recording firing #%d (%s)",
+            self._current_firing_id,
+            self._state.active_program_name or "manual",
+        )
         await self._record_reading(snapshot)
 
     async def _end_firing(self) -> None:

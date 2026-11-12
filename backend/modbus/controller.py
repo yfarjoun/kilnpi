@@ -78,6 +78,10 @@ class ControllerInterface(Protocol):
         """Read the target temperature (C_n register) for segment N (1-based)."""
         ...
 
+    def read_segment_ramp_min(self, seg_n: int) -> int:
+        """Read the ramp time in minutes (r_n register) for segment N (1-based)."""
+        ...
+
     def write_start_segment(self, segment: int) -> None:
         """Write the starting segment number (Pro register)."""
         ...

@@ -221,15 +221,25 @@ class RealController:
         """Read C_n — segment N's target temperature."""
         if not 1 <= seg_n <= registers.MAX_SEGMENTS:
             raise ValueError(f"segment {seg_n} out of range 1..{registers.MAX_SEGMENTS}")
-        inst = self._ensure_open()
-        self._throttle()
-        return float(
-            inst.read_register(
-                registers.segment_temp_addr(seg_n),
-                number_of_decimals=1,
-                signed=True,
+        with self._lock:
+            inst = self._ensure_open()
+            self._throttle()
+            return float(
+                inst.read_register(
+                    registers.segment_temp_addr(seg_n),
+                    number_of_decimals=1,
+                    signed=True,
+                )
             )
-        )
+
+    def read_segment_ramp_min(self, seg_n: int) -> int:
+        """Read r_n — segment N's ramp time (minutes)."""
+        if not 1 <= seg_n <= registers.MAX_SEGMENTS:
+            raise ValueError(f"segment {seg_n} out of range 1..{registers.MAX_SEGMENTS}")
+        with self._lock:
+            inst = self._ensure_open()
+            self._throttle()
+            return int(inst.read_register(registers.segment_ramp_addr(seg_n), 0))
 
     def read_alarm(self) -> tuple[bool, bool]:
         with self._lock:

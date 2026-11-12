@@ -29,11 +29,15 @@ class ControllerState:
     last_poll_ok: bool = False
     active_program_id: int | None = None
     active_program_name: str | None = None
-    # Target temp of the segment the controller is currently in (i.e., C_n
-    # where n = (PRO+1)//2). The poller refreshes this on each PRO change.
-    # Snapshot uses this as program_target_temp regardless of how the firing
-    # was started, with no slot assumption.
-    current_segment_target_temp: float | None = None
+    # Live interpolated setpoint the controller is driving toward right now.
+    # On a ramp (PRO odd): C_prev + (C_n - C_prev) * elapsed/r_n, where C_prev
+    # is the previous segment's endpoint or — at a program start, i.e. seg_n==1
+    # or when the register before seg_n is an end-marker (r==0) — the PV the
+    # poller observed when this segment first appeared. On a soak (PRO even),
+    # or on the skip-ramp sentinel r_n==2000, this holds C_n directly.
+    # Updated every poll; set to None when the controller is stopped or the
+    # segment-parameter reads fail.
+    live_setpoint: float | None = None
     _active_segments: list[dict] | None = field(default=None, repr=False)
     _pro_offset: int = field(default=1, repr=False)
     _run_started_at: datetime | None = field(default=None, repr=False)
@@ -82,9 +86,8 @@ class ControllerState:
                 total_elapsed = int(delta.total_seconds() / 60)
 
             # Dynamic target the controller is heading toward in the current
-            # segment. Read live from the controller by the poller
-            # (current_segment_target_temp); no slot assumption.
-            program_target_temp: float | None = self.current_segment_target_temp
+            # segment (interpolated on ramps, held on soaks, see `live_setpoint`).
+            program_target_temp: float | None = self.live_setpoint
 
             # User-facing segment number (1-based) from PRO value
             program_segment: int | None = None
@@ -124,9 +127,12 @@ class Poller:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._first_poll_done = threading.Event()
-        # Cache last-known PRO so we only re-read the segment target register
-        # when the PRO advances to a new segment.
-        self._last_seg_for_target: int | None = None
+        # Per-segment-transition cache of the parameters driving live-SP
+        # interpolation; refreshed only when PRO moves to a new seg_n.
+        # Tuple is (seg_n, C_n, C_prev, r_n_min). C_prev is either the
+        # previous segment's endpoint or, at a program start, the PV we
+        # observed at the transition (see _refresh_live_sp).
+        self._seg_cache: tuple[int, float, float | None, int] | None = None
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -159,12 +165,11 @@ class Poller:
                 self._state.update(pv, sp, mv, run_mode, segment, elapsed, alarm1, alarm2)
                 self._state.last_poll_ok = True
 
-                # Read the current segment's target temperature directly
-                # from the controller (no slot assumption — works whether
-                # the user fired via web UI, physical buttons, or anything
-                # else). Stored on state for the snapshot to expose as
-                # program_target_temp.
-                self._refresh_segment_target(run_mode, segment)
+                # Interpolate the live SP the way the controller does on
+                # its own display. Works regardless of how the firing was
+                # started (no slot assumption). Stored on state as
+                # `live_setpoint`.
+                self._refresh_live_sp(run_mode, segment, elapsed, pv)
             except Exception as exc:
                 self._state.last_poll_ok = False
                 logger.exception("Polling error")
@@ -189,26 +194,83 @@ class Poller:
 
             self._stop_event.wait(self._interval)
 
-    def _refresh_segment_target(self, run_mode: RunMode, pro: int) -> None:
-        """Read the current segment's target temp (C_n) from the controller
-        whenever PRO advances to a new segment. PRO encodes ramp+soak as
-        two consecutive steps per segment, so segment_n = (PRO + 1) // 2.
-        Stored on state so snapshot() can surface it as program_target_temp
-        without depending on any slot assumption or program-list cache.
+    def _refresh_live_sp(self, run_mode: RunMode, pro: int, elapsed_min: int, pv: float) -> None:
+        """Compute the live interpolated SP the controller is heading toward.
+
+        PRO encodes ramp(odd)+soak(even) per segment, so seg_n = (pro+1)//2
+        and is_ramp = (pro % 2 == 1). A ramp interpolates linearly from
+        C_prev to C_n over r_n minutes; a soak holds at C_n. Segment
+        parameters are read once per seg_n transition and cached; the
+        interpolation itself recomputes every poll as elapsed_min advances.
+
+        C_prev selection, at each PRO→new-seg_n transition:
+          * If seg_n == 1, or the register before seg_n is an end-marker
+            (r == 0, i.e. a previous slot's terminator), this is a program
+            start — use the PV the poller observes at this transition.
+          * Otherwise this is a mid-program transition — use the previous
+            segment's endpoint C_(n-1).
+
+        Sentinels (`docs/research/thermomart_pid_rs485_protocol.md`):
+          * r_n == 0 → "program ends here"; no ramp in progress.
+          * r_n == 2000 → "skip ramp": controller jumps straight to C_n.
+          In both cases live_sp is held at C_n, not interpolated.
+
+        WAIT holds the previous value — the controller has paused while PV
+        catches up, and elapsed_min stops advancing meaningfully until it
+        returns to RUNNING. OFF clears everything.
         """
-        if run_mode not in (RunMode.RUNNING, RunMode.STANDBY) or pro <= 0:
-            self._last_seg_for_target = None
-            self._state.current_segment_target_temp = None
+        if run_mode not in (RunMode.RUNNING, RunMode.STANDBY, RunMode.WAIT) or pro <= 0:
+            self._seg_cache = None
+            self._state.live_setpoint = None
+            return
+
+        if run_mode == RunMode.WAIT:
+            # Keep the cache and whatever live_setpoint we already have;
+            # just don't recompute until we see RUNNING/STANDBY again.
             return
 
         seg_n = (pro + 1) // 2
-        if seg_n == self._last_seg_for_target:
-            return  # cached value still valid
+        if self._seg_cache is None or self._seg_cache[0] != seg_n:
+            try:
+                c_n = self._controller.read_segment_target_temp(seg_n)
+                r_n = self._controller.read_segment_ramp_min(seg_n)
+                # C_prev selection — see docstring. For seg_n==1 we're always
+                # at a program start; for seg_n>=2 we check the preceding
+                # register's ramp to tell a mid-program transition from a
+                # slot-B-style start that lives after an end marker.
+                is_program_start = seg_n == 1 or (
+                    self._controller.read_segment_ramp_min(seg_n - 1) == 0
+                )
+                if is_program_start:
+                    # Guard against the TC-open sentinel (PV ~ 3276.7 °C
+                    # when no thermocouple is connected). Leaving c_prev
+                    # None falls back to live_sp = C_n.
+                    c_prev: float | None = pv if pv < _TC_OPEN_PV else None
+                else:
+                    c_prev = self._controller.read_segment_target_temp(seg_n - 1)
+            except Exception:
+                logger.exception("Failed to read segment %d params", seg_n)
+                # Don't leave a stale interpolation from the previous
+                # segment as the "current" value — frontends falling back
+                # on sp is strictly better than showing a lie.
+                self._state.live_setpoint = None
+                return
+            self._seg_cache = (seg_n, c_n, c_prev, r_n)
 
-        try:
-            target = self._controller.read_segment_target_temp(seg_n)
-        except Exception:
-            logger.exception("Failed to read segment %d target temp", seg_n)
-            return
-        self._state.current_segment_target_temp = target
-        self._last_seg_for_target = seg_n
+        _, c_n, c_prev, r_n = self._seg_cache
+        is_ramp = pro % 2 == 1
+        if is_ramp and c_prev is not None and 0 < r_n < _RAMP_SKIP_MIN:
+            frac = min(1.0, max(0.0, elapsed_min / r_n))
+            live_sp: float = c_prev + (c_n - c_prev) * frac
+        else:
+            live_sp = c_n
+        self._state.live_setpoint = live_sp
+
+
+# TC open-circuit sentinel: PV register reads 0x7FFF -> 3276.7 °C when the
+# thermocouple is unplugged. Any ramp-start capture above this is not a
+# real temperature. 3000 leaves plenty of headroom above kiln max (~1400).
+_TC_OPEN_PV = 3000.0
+
+# r_n register sentinels from the Thermomart protocol doc.
+_RAMP_SKIP_MIN = 2000

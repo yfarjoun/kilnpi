@@ -3,7 +3,12 @@
 import logging
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from backend.config import settings
 
@@ -21,9 +26,28 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         await _drop_legacy_power_l2_columns(conn)
         await _add_program_target_temp_column(conn)
+        await _add_composite_indexes(conn)
 
 
-async def _add_program_target_temp_column(conn) -> None:
+async def _add_composite_indexes(conn: AsyncConnection) -> None:
+    """Backfill ORM-declared composite indexes on pre-existing tables.
+
+    `create_all` only builds indexes alongside fresh tables, so a Pi DB whose
+    `readings` / `power_readings` tables predate the `__table_args__` Index
+    declarations in schemas.py won't have them. We iterate the ORM metadata
+    (rather than hardcoding names) so the two sources can't drift.
+    """
+    from backend.models.schemas import PowerReading, Reading
+
+    def _create_sync(sync_conn) -> None:  # type: ignore[no-untyped-def]
+        for table in (Reading.__table__, PowerReading.__table__):
+            for index in table.indexes:  # type: ignore[attr-defined]
+                index.create(sync_conn, checkfirst=True)
+
+    await conn.run_sync(_create_sync)
+
+
+async def _add_program_target_temp_column(conn: AsyncConnection) -> None:
     """Add readings.program_target_temp if missing — preserves old firing
     data while letting new readings store the ramp-interpolated target."""
     rows = (await conn.execute(text("PRAGMA table_info(readings)"))).fetchall()
@@ -33,7 +57,7 @@ async def _add_program_target_temp_column(conn) -> None:
         await conn.execute(text("ALTER TABLE readings ADD COLUMN program_target_temp REAL"))
 
 
-async def _drop_legacy_power_l2_columns(conn) -> None:
+async def _drop_legacy_power_l2_columns(conn: AsyncConnection) -> None:
     """Drop l2_voltage/l2_current/l2_power from power_readings if a pre-existing
     DB still has them. Single-PZEM setups have no use for them, and their
     NOT NULL constraint would block new inserts after the schema change.

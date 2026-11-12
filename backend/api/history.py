@@ -2,11 +2,11 @@
 
 import csv
 import io
-from typing import TypeVar
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.dto import (
@@ -17,7 +17,7 @@ from backend.dto import (
     ReadingResponse,
 )
 from backend.models.database import get_session
-from backend.models.schemas import Firing, PowerReading, Reading
+from backend.models.schemas import Firing, Reading
 
 router = APIRouter()
 
@@ -29,42 +29,116 @@ router = APIRouter()
 # "average load" trace rather than the on/off staircase of raw samples.
 DEFAULT_MAX_POINTS = 500
 
-T = TypeVar("T", ReadingResponse, PowerReadingResponse)
+# Lexicographic bounds for the COALESCE trick — timestamps stored as ISO 8601
+# strings all start with the year, so empty-string and all-nines bracket any
+# realistic value and the planner can turn them into index range bounds.
+_SINCE_MIN = ""
+_UNTIL_MAX = "9999"
+
+# Bucket SQL: timestamp is the bucket START (MIN), segment is the bucket's
+# EARLIEST value. AVG skips NULLs the same way the removed Python version did.
+# COALESCE on the range bounds lets the SQLite planner turn `since`/`until`
+# into true index-range constraints on idx_{readings,power_readings}_firing_ts
+# (the `(:p IS NULL OR col >= :p)` form only narrows by firing_id).
+_READINGS_BUCKET_SQL = text("""
+    WITH filtered AS (
+        SELECT timestamp, pv, sp, mv, segment, program_target_temp,
+               NTILE(:n) OVER (ORDER BY timestamp) AS bkt
+        FROM readings
+        WHERE firing_id = :firing_id
+          AND timestamp >= COALESCE(:since, :since_min)
+          AND timestamp <= COALESCE(:until, :until_max)
+    )
+    SELECT MIN(timestamp) AS timestamp,
+           AVG(pv) AS pv,
+           AVG(sp) AS sp,
+           AVG(mv) AS mv,
+           MIN(segment) AS segment,
+           AVG(program_target_temp) AS program_target_temp
+    FROM filtered
+    GROUP BY bkt
+    ORDER BY bkt
+""")
 
 
-def _bucket_mean(items: list[T], target: int) -> list[T]:
-    """Downsample a sorted-by-time list to roughly `target` items via bucket mean.
+_POWER_BUCKET_SQL = text("""
+    WITH filtered AS (
+        SELECT timestamp, l1_voltage, l1_current, l1_power,
+               NTILE(:n) OVER (ORDER BY timestamp) AS bkt
+        FROM power_readings
+        WHERE firing_id = :firing_id
+          AND timestamp >= COALESCE(:since, :since_min)
+          AND timestamp <= COALESCE(:until, :until_max)
+    )
+    SELECT MIN(timestamp) AS timestamp,
+           AVG(l1_voltage) AS l1_voltage,
+           AVG(l1_current) AS l1_current,
+           AVG(l1_power) AS l1_power
+    FROM filtered
+    GROUP BY bkt
+    ORDER BY bkt
+""")
 
-    Each bucket aggregates ~len(items)/target consecutive items: numeric
-    fields are averaged (Nones skipped), the bucket's middle item provides
-    the timestamp and any non-numeric / discrete fields.
-    """
-    if len(items) <= target or target <= 0:
-        return items
-    bucket_size = len(items) / target
-    out: list[T] = []
-    if isinstance(items[0], ReadingResponse):
-        mean_fields = ("pv", "sp", "mv", "program_target_temp")
-        carry_fields = ("segment",)
-    else:  # PowerReadingResponse
-        mean_fields = ("l1_voltage", "l1_current", "l1_power")
-        carry_fields = ()
-    for i in range(target):
-        start = int(i * bucket_size)
-        end = max(start + 1, int((i + 1) * bucket_size))
-        bucket = items[start:end]
-        if not bucket:
-            continue
-        mid = bucket[len(bucket) // 2]
-        avg: dict[str, float | int | str | None] = {"timestamp": mid.timestamp}
-        for f in mean_fields:
-            vals = [v for v in (getattr(b, f) for b in bucket) if v is not None]
-            avg[f] = sum(vals) / len(vals) if vals else None
-        for f in carry_fields:
-            avg[f] = getattr(mid, f)
-        # mypy/pyright happy: model_validate handles the dict
-        out.append(type(items[0]).model_validate(avg))
-    return out
+
+def _normalize_bound(value: datetime | None) -> str | None:
+    """Convert a FastAPI-parsed datetime to the recorder's storage format
+    (`datetime.now(UTC).isoformat()`) so SQLite's lexicographic comparison
+    matches rows written with any ISO offset or sub-second precision.
+    Naive inputs are assumed UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
+
+
+async def _bucket_readings(
+    session: AsyncSession,
+    firing_id: int,
+    max_points: int,
+    since: str | None,
+    until: str | None,
+) -> list[ReadingResponse]:
+    """SQL-side bucket-mean of readings. When row count <= max_points,
+    NTILE gives each row its own bucket so AVG(x) == x — pass-through."""
+    result = await session.execute(
+        _READINGS_BUCKET_SQL,
+        {
+            "n": max_points,
+            "firing_id": firing_id,
+            "since": since,
+            "until": until,
+            "since_min": _SINCE_MIN,
+            "until_max": _UNTIL_MAX,
+        },
+    )
+    return [ReadingResponse(**_row_dict(row)) for row in result]
+
+
+async def _bucket_power(
+    session: AsyncSession,
+    firing_id: int,
+    max_points: int,
+    since: str | None,
+    until: str | None,
+) -> list[PowerReadingResponse]:
+    """SQL-side bucket-mean of power readings; same NTILE/pass-through shape."""
+    result = await session.execute(
+        _POWER_BUCKET_SQL,
+        {
+            "n": max_points,
+            "firing_id": firing_id,
+            "since": since,
+            "until": until,
+            "since_min": _SINCE_MIN,
+            "until_max": _UNTIL_MAX,
+        },
+    )
+    return [PowerReadingResponse(**_row_dict(row)) for row in result]
+
+
+def _row_dict(row: object) -> dict:
+    return dict(row._mapping)  # type: ignore[attr-defined]
 
 
 def _firing_to_response(f: Firing) -> FiringResponse:
@@ -96,37 +170,32 @@ async def get_firing(
             "Cap on returned readings (downsample via bucket mean). Set higher for full detail."
         ),
     ),
+    since: datetime | None = Query(
+        None,
+        description=(
+            "ISO-8601 timestamp (e.g. 2026-11-11T12:00:00Z); drop readings older "
+            "than this. Naive values are treated as UTC."
+        ),
+    ),
+    until: datetime | None = Query(
+        None,
+        description="ISO-8601 timestamp; drop readings newer than this.",
+    ),
     session: AsyncSession = Depends(get_session),
 ) -> FiringDetailResponse:
     firing = await session.get(Firing, firing_id)
     if not firing:
         raise HTTPException(status_code=404, detail="Firing not found")
-    result = await session.execute(
-        select(Reading).where(Reading.firing_id == firing_id).order_by(Reading.timestamp)
-    )
-    readings = [
-        ReadingResponse(
-            timestamp=r.timestamp,
-            pv=r.pv,
-            sp=r.sp,
-            mv=r.mv,
-            segment=r.segment,
-            program_target_temp=r.program_target_temp,
-        )
-        for r in result.scalars().all()
-    ]
-    power_result = await session.execute(
-        select(PowerReading)
-        .where(PowerReading.firing_id == firing_id)
-        .order_by(PowerReading.timestamp)
-    )
-    power_readings = [
-        PowerReadingResponse.model_validate(pr) for pr in power_result.scalars().all()
-    ]
+    if since is not None and until is not None and since > until:
+        raise HTTPException(status_code=422, detail="since must be <= until")
+    since_s = _normalize_bound(since)
+    until_s = _normalize_bound(until)
+    readings = await _bucket_readings(session, firing_id, max_points, since_s, until_s)
+    power_readings = await _bucket_power(session, firing_id, max_points, since_s, until_s)
     return FiringDetailResponse(
         firing=_firing_to_response(firing),
-        readings=_bucket_mean(readings, max_points),
-        power_readings=_bucket_mean(power_readings, max_points),
+        readings=readings,
+        power_readings=power_readings,
     )
 
 

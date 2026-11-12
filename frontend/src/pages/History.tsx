@@ -5,6 +5,16 @@ import { PowerChart } from '../components/PowerChart';
 import type { PowerDataPoint } from '../components/PowerChart';
 import type { Firing, FiringDetail, FiringStats } from '../types';
 
+// Null program_name means the firing has no Pi-side program context — either
+// physical-button start, direct SP write, or a lost-RAM window around a crash.
+// The DB stays NULL (keeps it out of `/api/stats` by_program aggregation);
+// labelling happens here.
+function displayFiringName(f: Firing): string {
+  if (f.program_name) return f.program_name;
+  if (f.program_id == null) return `(manual) Firing #${f.id}`;
+  return `Firing #${f.id}`;
+}
+
 export function History() {
   const [firings, setFirings] = useState<Firing[]>([]);
   const [selected, setSelected] = useState<FiringDetail | null>(null);
@@ -83,7 +93,7 @@ export function History() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm dark:shadow-none">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-semibold">
-              {f.program_name || `Firing #${f.id}`}
+              {displayFiringName(f)}
             </h3>
             <button
               onClick={() => handleDeleteFiring(f.id)}
@@ -196,7 +206,7 @@ export function History() {
             >
               <div className="min-w-0 flex-1">
                 <div className="font-medium">
-                  {f.program_name || `Firing #${f.id}`}
+                  {displayFiringName(f)}
                   {openingFiring === f.id && (
                     <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                       loading…

@@ -111,6 +111,46 @@ async def test_recorder_ends_firing_on_stop() -> None:
 
 
 @pytest.mark.asyncio
+async def test_manual_firing_has_null_program_name() -> None:
+    """A firing started without Pi-side program context (physical buttons,
+    or mid-crash) must leave program_name=NULL in the DB so it stays out of
+    /api/stats by_program aggregation. The display label is a frontend
+    concern — baking it here would conflate "no program" with a program
+    literally named "(manual)"."""
+    state = ControllerState()  # active_program_name stays None
+    recorder = Recorder(state, interval=0.05)
+
+    state.update(
+        pv=200,
+        sp=800,
+        mv=50,
+        run_mode=RunMode.RUNNING,
+        segment=1,
+        segment_elapsed_min=0,
+        alarm1=False,
+        alarm2=False,
+    )
+
+    task = asyncio.create_task(recorder.run())
+    await asyncio.sleep(0.2)
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(Firing).where(Firing.status == "running").order_by(Firing.id.desc())
+        )
+        firing = result.scalars().first()
+        assert firing is not None
+        assert firing.program_name is None
+        assert firing.program_id is None
+
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
 async def test_recorder_no_firing_when_idle() -> None:
     before_count = await _count_firings()
 

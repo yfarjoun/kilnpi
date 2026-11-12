@@ -83,8 +83,19 @@ export const api = {
 
   listFirings: () => request<import('../types').Firing[]>('/firings'),
 
-  getFiring: (id: number) =>
-    request<import('../types').FiringDetail>(`/firings/${id}`),
+  getFiring: (
+    id: number,
+    opts?: { maxPoints?: number; since?: string; until?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (opts?.maxPoints !== undefined) params.set('max_points', String(opts.maxPoints));
+    if (opts?.since) params.set('since', opts.since);
+    if (opts?.until) params.set('until', opts.until);
+    const qs = params.toString();
+    return request<import('../types').FiringDetail>(
+      `/firings/${id}${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   deleteFiring: (id: number) =>
     request<{ ok: boolean }>(`/firings/${id}`, { method: 'DELETE' }),
