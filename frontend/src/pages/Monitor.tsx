@@ -184,16 +184,22 @@ export function Monitor() {
           </div>
           <button
             onClick={() => setPaused(!paused)}
+            title={
+              paused
+                ? 'Resume appending live data to this chart. The kiln and server are unaffected.'
+                : 'Stop appending live data to this chart in this browser tab. The kiln keeps firing and the server keeps recording — only this view pauses.'
+            }
             className={`px-3 py-1 rounded text-sm ${
               paused
                 ? 'bg-green-600 hover:bg-green-500 text-white'
                 : 'bg-yellow-600 hover:bg-yellow-500 text-white'
             }`}
           >
-            {paused ? 'Resume' : 'Pause'}
+            {paused ? 'Resume Chart' : 'Pause Chart'}
           </button>
           <button
             onClick={() => { setReadings([]); setPowerData([]); }}
+            title="Empty this tab's chart buffer. Does NOT delete any recorded data — readings stay in the database and the chart rebuilds from the next live point (or from the server when you switch time range)."
             className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm text-gray-700 dark:text-white"
           >
             Clear Chart

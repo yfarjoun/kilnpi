@@ -31,7 +31,13 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
     () =>
       readings.map((r, i) => ({
         index: i,
-        time: new Date(r.timestamp).toLocaleTimeString(),
+        // ts is the unix ms timestamp used by the time-scale XAxis so each
+        // point lands at its real moment on the axis. Without this, Recharts
+        // treats points as evenly spaced categories, which makes live-appended
+        // points (2–5s apart) take up the same horizontal space as preload
+        // buckets (~65s apart) and produces a jumpy "new point lands as a big
+        // diagonal" effect at the right edge.
+        ts: new Date(r.timestamp).getTime(),
         PV: Math.round(r.pv),
         // Prefer the controller's dynamic ramp target when known; fall back to
         // the static SP for old readings / non-program firings.
@@ -53,11 +59,21 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
     }
   }
 
+  const tsTickFormatter = (ts: number) => new Date(ts).toLocaleTimeString();
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-        <XAxis dataKey="time" stroke="var(--chart-text)" tick={{ fontSize: 12 }} />
+        <XAxis
+          dataKey="ts"
+          type="number"
+          domain={['dataMin', 'dataMax']}
+          scale="time"
+          tickFormatter={tsTickFormatter}
+          stroke="var(--chart-text)"
+          tick={{ fontSize: 12 }}
+        />
         <YAxis yAxisId="temp" stroke="var(--chart-text)" tick={{ fontSize: 12 }} />
         <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} stroke="var(--chart-text)" tick={{ fontSize: 12 }} />
         <Tooltip
@@ -67,16 +83,18 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
             borderRadius: 8,
           }}
           labelStyle={{ color: 'var(--chart-text)' }}
+          labelFormatter={(label) => new Date(label as number).toLocaleTimeString()}
         />
         <Legend />
         <Line yAxisId="temp" type="basis" dataKey="PV" stroke="#EF4444" dot={false} strokeWidth={2} isAnimationActive={false} />
         <Line yAxisId="temp" type="basis" dataKey="SP" stroke="#3B82F6" dot={false} strokeWidth={2} strokeDasharray="5 5" isAnimationActive={false} />
         <Line yAxisId="pct" type="basis" dataKey="MV" stroke="#10B981" dot={false} strokeWidth={1} isAnimationActive={false} />
         <Brush
-          dataKey="time"
+          dataKey="ts"
           height={40}
           stroke="var(--chart-text)"
           travellerWidth={24}
+          tickFormatter={tsTickFormatter}
           startIndex={brushRange.startIndex}
           endIndex={brushRange.endIndex}
           onChange={(range: { startIndex?: number; endIndex?: number }) =>
@@ -86,7 +104,7 @@ export function FiringChart({ readings, height = 400, cutoffTimestamp }: FiringC
         {cutoffIndex !== null && (
           <ReferenceLine
             yAxisId="temp"
-            x={data[cutoffIndex].time}
+            x={data[cutoffIndex].ts}
             stroke="#F59E0B"
             strokeDasharray="6 4"
             strokeWidth={2}
