@@ -52,7 +52,7 @@ async def test_composite_indexes_backfilled_on_legacy_db() -> None:
 
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp.name}")
         async with engine.begin() as conn:
-            await database._add_composite_indexes(conn)
+            await database._backfill_declared_indexes(conn)
 
         async with engine.connect() as conn:
             rows = (
@@ -66,7 +66,7 @@ async def test_composite_indexes_backfilled_on_legacy_db() -> None:
 
         # Second run: idempotent.
         async with engine.begin() as conn:
-            await database._add_composite_indexes(conn)
+            await database._backfill_declared_indexes(conn)
         async with engine.connect() as conn:
             rows = (
                 await conn.execute(text("PRAGMA index_info(idx_readings_firing_ts)"))

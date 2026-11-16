@@ -63,6 +63,17 @@ class Firing(Base):
     power_readings: Mapped[list[PowerReading]] = relationship(
         back_populates="firing", cascade="all, delete-orphan"
     )
+    # FiringStats is defined later in this module; the quoted annotation is a
+    # forward reference (ruff UP037 wants it unquoted, but pyright can't resolve
+    # it unquoted since the class isn't declared yet at this point in the file).
+    stats: Mapped["FiringStats | None"] = relationship(  # noqa: UP037
+        back_populates="firing", cascade="all, delete-orphan", uselist=False
+    )
+
+    # /api/stats/* and the by-program aggregate both filter by status='completed';
+    # with ~50+ firings and a reading-scan already behind them, an index-only
+    # scan over this column pays for itself immediately.
+    __table_args__ = (Index("idx_firings_status", "status"),)
 
 
 class Reading(Base):
@@ -101,3 +112,41 @@ class PowerReading(Base):
     firing: Mapped[Firing] = relationship(back_populates="power_readings")
 
     __table_args__ = (Index("idx_power_readings_firing_ts", "firing_id", "timestamp"),)
+
+
+class FiringStats(Base):
+    """Precomputed per-firing aggregates, written once when a firing ends and
+    never touched after. The Statistics page endpoints read from here instead
+    of re-scanning every reading of every firing at request time.
+
+    firing_id is both the primary key and a cascading foreign key, so deleting
+    a firing drops its stats row automatically.
+    """
+
+    __tablename__ = "firing_stats"
+
+    firing_id: Mapped[int] = mapped_column(
+        ForeignKey("firings.id", ondelete="CASCADE"), primary_key=True
+    )
+    max_temp: Mapped[float] = mapped_column(nullable=False)
+    duration_min: Mapped[float] = mapped_column(nullable=False)
+    # Active duration = start → sitter cutoff. NULL for firings without a
+    # detected sitter trip.
+    active_duration_min: Mapped[float | None] = mapped_column(nullable=True)
+    cutoff_timestamp: Mapped[str | None] = mapped_column(String, nullable=True)
+    avg_mv: Mapped[float] = mapped_column(nullable=False)
+    cooling_rate: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    # heating_rates_json holds {band_label: deg_per_min}. Bands absent from
+    # the firing (temp never crossed that range) simply aren't present.
+    heating_rates_json: Mapped[str] = mapped_column(String, nullable=False, default="{}")
+    computed_at: Mapped[str] = mapped_column(String, nullable=False)
+
+    firing: Mapped[Firing] = relationship(back_populates="stats")
+
+    @property
+    def heating_rates(self) -> dict[str, float]:
+        return json.loads(self.heating_rates_json)
+
+    @heating_rates.setter
+    def heating_rates(self, value: dict[str, float]) -> None:
+        self.heating_rates_json = json.dumps(value)

@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from backend.models.database import async_session
 from backend.models.schemas import Firing, PowerReading, Reading
+from backend.services.firing_stats import compute_and_store as compute_firing_stats_and_store
 from backend.services.poller import ControllerState
 from backend.services.power_poller import PowerState
 
@@ -52,7 +53,14 @@ class Recorder:
                 stale.ended_at = datetime.now(UTC).isoformat()
                 stale.status = "completed"
                 await session.commit()
-                logger.info("Closed stale firing #%d after restart", stale.id)
+                stale_id = stale.id
+                logger.info("Closed stale firing #%d after restart", stale_id)
+                # Precompute firing_stats for the just-closed firing so the
+                # Statistics page doesn't need to re-scan its readings.
+                try:
+                    await compute_firing_stats_and_store(session, stale_id)
+                except Exception:
+                    logger.exception("Failed to compute firing_stats for #%d", stale_id)
 
     async def run(self) -> None:
         """Main recording loop — runs as an asyncio task."""
@@ -103,14 +111,21 @@ class Recorder:
     async def _end_firing(self) -> None:
         if self._current_firing_id is None:
             return
+        fid = self._current_firing_id
         now = datetime.now(UTC).isoformat()
         async with async_session() as session:
-            firing = await session.get(Firing, self._current_firing_id)
+            firing = await session.get(Firing, fid)
             if firing:
                 firing.ended_at = now
                 firing.status = "completed"
                 await session.commit()
-        logger.info("Ended recording firing #%d", self._current_firing_id)
+            # Precompute stats inside the same session. Separate try so a
+            # stats failure can't roll back the firing-end write.
+            try:
+                await compute_firing_stats_and_store(session, fid)
+            except Exception:
+                logger.exception("Failed to compute firing_stats for #%d", fid)
+        logger.info("Ended recording firing #%d", fid)
         self._current_firing_id = None
 
     async def _record_reading(self, snapshot: dict) -> None:
