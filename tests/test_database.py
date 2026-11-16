@@ -1,4 +1,4 @@
-"""Tests for the init_db migrations."""
+"""Tests for the init_db migrations and SQLite PRAGMA setup."""
 
 import os
 import tempfile
@@ -6,6 +6,24 @@ import tempfile
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from backend.models.database import engine as main_engine
+
+
+@pytest.mark.asyncio
+async def test_sqlite_pragmas_applied_on_connect() -> None:
+    """Every new connection should come up with WAL journal mode,
+    busy_timeout set, synchronous=NORMAL, and foreign_keys enforced."""
+    async with main_engine.connect() as conn:
+        journal = (await conn.execute(text("PRAGMA journal_mode"))).scalar_one()
+        timeout = (await conn.execute(text("PRAGMA busy_timeout"))).scalar_one()
+        synchronous = (await conn.execute(text("PRAGMA synchronous"))).scalar_one()
+        foreign_keys = (await conn.execute(text("PRAGMA foreign_keys"))).scalar_one()
+    assert journal == "wal"
+    assert timeout == 5000
+    # synchronous=NORMAL is 1 in SQLite's numeric table.
+    assert synchronous == 1
+    assert foreign_keys == 1
 
 
 @pytest.mark.asyncio
@@ -63,6 +81,7 @@ async def test_composite_indexes_backfilled_on_legacy_db() -> None:
         names = {r[0] for r in rows}
         assert "idx_readings_firing_ts" in names
         assert "idx_power_readings_firing_ts" in names
+        assert "idx_firings_status" in names
 
         # Second run: idempotent.
         async with engine.begin() as conn:

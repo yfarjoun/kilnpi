@@ -46,10 +46,21 @@ Production remains on port 8000.
    ```
 
 2. Seed the staging DB from a copy of the live DB (so the migration runs
-   against real data layout, and the History/Monitor views have content):
+   against real data layout, and the History/Monitor views have content).
+   Prod runs SQLite in WAL mode, which keeps `-wal` and `-shm` sidecar
+   files next to `kiln.db`; a plain `cp kiln.db` omits transactions still
+   in the WAL. Use the online-backup API (Python stdlib, since the
+   `sqlite3` CLI isn't installed on the Pi):
    ```
-   sudo systemctl --user stop kilnpi-staging   # release the DB file
-   cp ~/kilnpi/data/kiln.db ~/kilnpi-staging/data/kiln-staging.db
+   sudo systemctl --user stop kilnpi-staging
+   python3 - <<BACKUP
+   import sqlite3
+   src = sqlite3.connect('/home/farjoun/kilnpi/data/kiln.db')
+   dst = sqlite3.connect('/home/farjoun/kilnpi-staging/data/kiln-staging.db')
+   with dst:
+       src.backup(dst)
+   src.close(); dst.close()
+   BACKUP
    sudo systemctl --user start kilnpi-staging
    journalctl --user -u kilnpi-staging -n 100 -f
    ```
@@ -70,7 +81,11 @@ service (do NOT do this while firing):
 
 ```
 sudo systemctl --user stop kilnpi
-cp ~/kilnpi/data/kiln.db ~/kilnpi/data/kiln.db.$(date +%F).bak
+# WAL mode leaves a -wal and -shm sidecar; a clean stop checkpoints and
+# removes them. Copy them if they're still there (unclean shutdown).
+cp ~/kilnpi/data/kiln.db     ~/kilnpi/data/kiln.db.$(date +%F).bak
+cp ~/kilnpi/data/kiln.db-wal ~/kilnpi/data/kiln.db-wal.$(date +%F).bak 2>/dev/null || true
+cp ~/kilnpi/data/kiln.db-shm ~/kilnpi/data/kiln.db-shm.$(date +%F).bak 2>/dev/null || true
 cd ~/kilnpi
 git fetch && git checkout <sha>
 uv sync   # if deps changed
@@ -78,8 +93,10 @@ sudo systemctl --user start kilnpi
 journalctl --user -u kilnpi -n 100 -f
 ```
 
-If anything throws on startup, stop the service, `mv` the backup DB back,
-`git checkout -` and restart.
+If anything throws on startup: stop the service, remove any current
+`kiln.db-wal`/`kiln.db-shm` (they belong to the new version's write
+sequence and would replay onto the restored DB), `mv` the backup
+`kiln.db` back, `git checkout -` and restart.
 
 ## Validating the Modbus-dependent changes
 

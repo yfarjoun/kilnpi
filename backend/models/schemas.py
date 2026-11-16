@@ -70,9 +70,7 @@ class Firing(Base):
         back_populates="firing", cascade="all, delete-orphan", uselist=False
     )
 
-    # /api/stats/* and the by-program aggregate both filter by status='completed';
-    # with ~50+ firings and a reading-scan already behind them, an index-only
-    # scan over this column pays for itself immediately.
+    # /api/stats/* queries filter on status='completed'.
     __table_args__ = (Index("idx_firings_status", "status"),)
 
 
@@ -115,12 +113,14 @@ class PowerReading(Base):
 
 
 class FiringStats(Base):
-    """Precomputed per-firing aggregates, written once when a firing ends and
-    never touched after. The Statistics page endpoints read from here instead
-    of re-scanning every reading of every firing at request time.
+    """Per-firing summary aggregates (max_temp, duration, heating/cooling
+    rates, sitter cutoff), keyed 1:1 to a Firing. The Statistics endpoints
+    aggregate over this table instead of scanning the readings.
 
-    firing_id is both the primary key and a cascading foreign key, so deleting
-    a firing drops its stats row automatically.
+    Deletion through the Firing.stats ORM relationship removes this row
+    (cascade="all, delete-orphan"); the FK's ondelete=CASCADE extends the
+    same semantics to raw-SQL deletes on connections where PRAGMA
+    foreign_keys is ON.
     """
 
     __tablename__ = "firing_stats"
@@ -130,16 +130,15 @@ class FiringStats(Base):
     )
     max_temp: Mapped[float] = mapped_column(nullable=False)
     duration_min: Mapped[float] = mapped_column(nullable=False)
-    # Active duration = start → sitter cutoff. NULL for firings without a
-    # detected sitter trip.
+    # Active duration runs from firing start to detected sitter cutoff. NULL
+    # when no sitter trip was detected (normal firings).
     active_duration_min: Mapped[float | None] = mapped_column(nullable=True)
     cutoff_timestamp: Mapped[str | None] = mapped_column(String, nullable=True)
     avg_mv: Mapped[float] = mapped_column(nullable=False)
     cooling_rate: Mapped[float] = mapped_column(nullable=False, default=0.0)
-    # heating_rates_json holds {band_label: deg_per_min}. Bands absent from
-    # the firing (temp never crossed that range) simply aren't present.
+    # Per-band {label: deg_per_min}; bands the firing never crossed are
+    # absent from the dict.
     heating_rates_json: Mapped[str] = mapped_column(String, nullable=False, default="{}")
-    computed_at: Mapped[str] = mapped_column(String, nullable=False)
 
     firing: Mapped[Firing] = relationship(back_populates="stats")
 

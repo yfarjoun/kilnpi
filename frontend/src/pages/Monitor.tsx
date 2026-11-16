@@ -167,11 +167,16 @@ export function Monitor() {
         <h2 className="text-xl font-semibold">Live Monitor</h2>
         <div className="flex items-center gap-4 flex-wrap">
           <StatusBar status={status} />
-          <div className="inline-flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
+          <div
+            role="group"
+            aria-label="Chart time range"
+            className="inline-flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600"
+          >
             {RANGES.map((r) => (
               <button
                 key={r.id}
                 onClick={() => setRange(r.id)}
+                aria-pressed={range === r.id}
                 className={`px-3 py-1 text-sm ${
                   range === r.id
                     ? 'bg-blue-600 text-white'
@@ -184,6 +189,12 @@ export function Monitor() {
           </div>
           <button
             onClick={() => setPaused(!paused)}
+            aria-pressed={paused}
+            aria-label={
+              paused
+                ? 'Resume appending live data to the chart (chart-only; does not affect the kiln or recorded data)'
+                : 'Pause appending live data to the chart (chart-only; does not stop the firing or recorded data)'
+            }
             title={
               paused
                 ? 'Resume appending live data to this chart. The kiln and server are unaffected.'
@@ -199,6 +210,7 @@ export function Monitor() {
           </button>
           <button
             onClick={() => { setReadings([]); setPowerData([]); }}
+            aria-label="Clear the chart display in this tab (does not delete recorded data from the database)"
             title="Empty this tab's chart buffer. Does NOT delete any recorded data — readings stay in the database and the chart rebuilds from the next live point (or from the server when you switch time range)."
             className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-sm text-gray-700 dark:text-white"
           >

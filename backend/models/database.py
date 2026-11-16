@@ -18,20 +18,24 @@ engine = create_async_engine(settings.db_url, echo=False)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-# SQLite PRAGMAs applied on every new raw connection. WAL lets readers
-# (Monitor WebSocket broadcasts, History, Stats) run without blocking the
-# recorder's writes and vice-versa — critical on the Pi's single core where
-# a long read used to starve the 2s poll. busy_timeout gives any transaction
-# up to 5s to acquire the lock before failing instead of the SQLite default
-# of returning SQLITE_BUSY immediately. synchronous=NORMAL is the standard
-# pairing with WAL: slightly faster commits, still corruption-safe on power
-# loss (at most, the last transaction is lost, not the whole DB).
+# SQLite PRAGMAs applied on every new raw connection.
+#   - busy_timeout: any statement waits up to 5s for the write lock instead
+#     of SQLITE_BUSY immediately. Set first so the WAL conversion below has
+#     a timeout in its own pocket if another writer holds the lock.
+#   - journal_mode=WAL: concurrent readers don't block the recorder's
+#     writes on the Pi's single core.
+#   - synchronous=NORMAL: the standard pairing with WAL. Commit fsync drops
+#     from per-commit to on checkpoint; at most the last transaction is lost
+#     on power loss, the DB stays consistent.
+#   - foreign_keys=ON: enforces ondelete semantics (notably firing_stats
+#     CASCADE) at the DB level, not only through the ORM relationship.
 @event.listens_for(engine.sync_engine, "connect")
-def _enable_sqlite_pragmas(dbapi_conn, _record) -> None:  # type: ignore[no-untyped-def]
-    cur = dbapi_conn.cursor()
-    cur.execute("PRAGMA journal_mode=WAL")
+def _enable_sqlite_pragmas(dbapi_conn: object, _record: object) -> None:
+    cur = dbapi_conn.cursor()  # type: ignore[attr-defined]
     cur.execute("PRAGMA busy_timeout=5000")
+    cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA synchronous=NORMAL")
+    cur.execute("PRAGMA foreign_keys=ON")
     cur.close()
 
 
