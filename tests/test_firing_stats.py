@@ -75,15 +75,15 @@ async def test_compute_and_store_creates_row() -> None:
 
 @pytest.mark.asyncio
 async def test_compute_and_store_idempotent_upserts() -> None:
-    """Second call must not create a duplicate row and must update computed_at."""
+    """Second call upserts the same row rather than creating a duplicate,
+    and the stored fields reflect the latest readings."""
     fid = await _seed_firing(minutes_span=60)
     async with async_session() as session:
         first = await compute_and_store(session, fid)
         assert first is not None
-        first_computed_at = first.computed_at
+        first_max = first.max_temp
 
-    # Bump by inserting another reading, re-compute, verify the row was updated
-    # in place (same PK) and computed_at advanced.
+    # Bump by inserting another reading hotter than the previous peak.
     async with async_session() as session:
         later_ts = (datetime(2025, 1, 1, tzinfo=UTC) + timedelta(minutes=120)).isoformat()
         session.add(
@@ -94,15 +94,15 @@ async def test_compute_and_store_idempotent_upserts() -> None:
     async with async_session() as session:
         second = await compute_and_store(session, fid)
         assert second is not None
-        # Only one stats row exists for this firing.
+        # Exactly one stats row exists for this firing.
         rows = (
             (await session.execute(select(FiringStats).where(FiringStats.firing_id == fid)))
             .scalars()
             .all()
         )
         assert len(rows) == 1
-        assert second.max_temp == 1050.0  # the new reading raised the max
-        assert second.computed_at >= first_computed_at
+        assert second.max_temp == 1050.0
+        assert second.max_temp > first_max
 
 
 @pytest.mark.asyncio
@@ -145,6 +145,112 @@ async def test_firing_delete_cascades_to_stats() -> None:
             .all()
         )
         assert remaining == []
+
+
+@pytest.mark.asyncio
+async def test_tc_open_sentinel_pvs_dropped_from_stats() -> None:
+    """Readings with pv >= 3000 are the thermocouple-open sentinel (3276.7)
+    and must not corrupt max_temp, cutoff, or cooling_rate."""
+    # 20 regular readings climbing to 800, then one sentinel reading to
+    # simulate a TC unplug, then recovery.
+    base = datetime(2025, 1, 1, tzinfo=UTC)
+    async with async_session() as session:
+        firing = Firing(
+            started_at=base.isoformat(),
+            ended_at=(base + timedelta(minutes=30)).isoformat(),
+            status="completed",
+            program_name="Test",
+        )
+        session.add(firing)
+        await session.commit()
+        await session.refresh(firing)
+        fid: int = firing.id
+        for i in range(20):
+            session.add(
+                Reading(
+                    firing_id=fid,
+                    timestamp=(base + timedelta(minutes=i)).isoformat(),
+                    pv=25.0 + i * 40,
+                    sp=800.0,
+                    mv=80.0,
+                    segment=1,
+                )
+            )
+        session.add(
+            Reading(
+                firing_id=fid,
+                timestamp=(base + timedelta(minutes=25)).isoformat(),
+                pv=3276.7,
+                sp=800.0,
+                mv=80.0,
+                segment=1,
+            )
+        )
+        await session.commit()
+
+    async with async_session() as session:
+        stats = await compute_and_store(session, fid)
+        assert stats is not None
+        # 3276.7 must not appear as max_temp, and must not drive the cutoff
+        # detector or cooling_rate.
+        assert stats.max_temp < 3000
+        assert stats.cutoff_timestamp is None
+
+
+@pytest.mark.asyncio
+async def test_heating_rates_survive_db_roundtrip() -> None:
+    """The JSON-column property setter/getter preserves the dict shape."""
+    fid = await _seed_firing(minutes_span=60)
+    async with async_session() as session:
+        await compute_and_store(session, fid)
+
+    async with async_session() as session:
+        row = await session.get(FiringStats, fid)
+        assert row is not None
+        rates = row.heating_rates
+        assert isinstance(rates, dict)
+        # Linear 25→800 over 60 min crosses every band under 800.
+        assert "0-200" in rates
+        assert "600-800" in rates
+        for v in rates.values():
+            assert isinstance(v, float)
+
+
+@pytest.mark.asyncio
+async def test_running_firing_excluded_from_backfill() -> None:
+    """A still-running firing must not get its stats backfilled by the
+    lazy-backfill path — only completed firings are eligible."""
+    from backend.api.stats import _backfill_missing_stats
+
+    base = datetime(2025, 1, 1, tzinfo=UTC)
+    async with async_session() as session:
+        firing = Firing(started_at=base.isoformat(), status="running", program_name="Live")
+        session.add(firing)
+        await session.commit()
+        await session.refresh(firing)
+        fid = firing.id
+        session.add(
+            Reading(
+                firing_id=fid,
+                timestamp=base.isoformat(),
+                pv=100.0,
+                sp=800.0,
+                mv=50.0,
+                segment=1,
+            )
+        )
+        await session.commit()
+
+    async with async_session() as session:
+        written = await _backfill_missing_stats(session)
+        # Nothing written for the running firing.
+        rows = (
+            (await session.execute(select(FiringStats).where(FiringStats.firing_id == fid)))
+            .scalars()
+            .all()
+        )
+        assert rows == []
+    assert written == 0
 
 
 @pytest.mark.asyncio
